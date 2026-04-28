@@ -55,11 +55,13 @@ Output: per-(model, emotion, layer) direction vectors saved at `outputs/phase1_v
 | gemma-3-270m-it | gemma3 (transformer) | 18 | 640 | −0.982 @ L11 | 0.65 | +0.851 @ L11 |
 | Qwen2.5-0.5B-Instruct | qwen2 (transformer) | 24 | 896 | −0.975 @ L10 | 0.43 | −0.749 @ L8 |
 | SmolLM2-360M-Instruct | llama (transformer) | 32 | 960 | −0.982 @ L24 | 0.77 | +0.665 @ L22 |
+| Ouro-1.4B-Thinking | ouro (universal-transformer, 4 loops × 24 layers) | 24 (×4 ut) | 2048 | −0.984 @ (L15, ut=3) | 0.65 of stack | −0.773 @ (L6, ut=0) |
 | gemma-2-2b | gemma2 (transformer) | 26 | 2304 | −0.996 @ L8 | 0.32 | +0.266 @ L0 |
 | RWKV-x070-World-2.9B | rwkv7 (recurrent) | 32 | 2560 | −0.991 @ L7 | 0.23 | −0.838 @ L0 |
 
-  Every model exceeds Sofroniew's published PC1↔valence |r|=0.81 (on a 70B model). PC2↔arousal varies more across models. Layer-fraction at which valence structure peaks ranges from 0.23 (RWKV-7) to 0.77 (SmolLM2) — RWKV-7 reaches valence structure at the lowest layer fraction.
-- [x] **Cross-architecture finding.** The geometry is consistent across the qwen2, llama, gemma2, gemma3, and (non-transformer) rwkv7 families. This is stronger than a within-transformer replication: the shared latent geometry is not a transformer-specific artifact but emerges across both attention-based and linear-attention-recurrent paradigms. The 8B scale test (Llama-3-8B-Instruct) is deferred until GPUs are free of the user's other concurrent jobs.
+  Every model exceeds Sofroniew's published PC1↔valence |r|=0.81 (on a 70B model). PC2↔arousal varies more across models.
+- [x] **Ouro-specific finding.** Probing 96 (layer, ut_step) sites: max |PC1↔valence| per ut step climbs **0.348 → 0.976 → 0.982 → 0.984** across iterations 0–3. Valence structure does not exist after the first pass through the 24-layer stack; it builds up across loop iterations. PC2↔arousal peaks at (L6, ut=0) — arousal is encoded immediately, valence requires multiple "thinking" passes. This is a Universal-Transformer-specific signal that the looping isn't just re-encoding.
+- [x] **Cross-architecture finding.** The geometry is consistent across qwen2, llama, gemma2, gemma3, ouro (universal-transformer), and rwkv7 (linear-attention recurrent) — six families across three architectural paradigms (standard attention, looped attention, recurrent). The shared latent geometry is not a transformer-specific artifact. The 8B scale test (Llama-3-8B-Instruct) is deferred until GPUs are free of the user's other concurrent jobs. Monet (sparse MoE) is deferred pending transformers 4.x compat env — its modeling code and config validation hit cascading incompatibilities with transformers 5.7.
 
 **Open from Phase 1, addressable in Phase 1.5 if needed:**
 - The neutral contrast set is short factual sentences. This means the diff-of-means direction picks up "emotional vs factual prose" as a side channel, visible in early-layer AUROC=1.0 but not in mid-late PCA. Add a within-emotion contrast (e.g., emotion E vs the union of other emotions) and re-evaluate.
@@ -125,7 +127,7 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 | Phase | Status | Notes |
 |---|---|---|
 | 0 — Infra | **done** (2026-04-28) | ModelAdapter, extract, steer, stimuli, run_dir; 9/9 tests pass on Qwen2.5-0.5B |
-| 1 — Vectors | **v0 done** (2026-04-28) | Geometry replicates on 5 architectures (qwen2, llama, gemma2, gemma3, rwkv7); best \|PC1↔valence\| ranges 0.975–0.996 |
+| 1 — Vectors | **v0 done** (2026-04-28) | Geometry replicates on 6 architectures (qwen2, llama, gemma2, gemma3, ouro, rwkv7); best \|PC1↔valence\| ranges 0.975–0.996. Ouro: valence builds across loop iterations (0.35→0.98) |
 | 2 — Adapter | not started | depends on Phase 1 |
 | 3 — Behavior | not started | parallelizable with Phase 1/2 |
 | 4 — Causal | not started | depends on Phase 1 |

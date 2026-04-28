@@ -39,13 +39,17 @@ def main() -> None:
     ap.add_argument("--position", default=-1, help="int or 'last_real'")
     ap.add_argument("--per-cell", type=int, default=30)
     ap.add_argument("--no-plot", action="store_true")
+    ap.add_argument("--trust-remote-code", action="store_true")
     args = ap.parse_args()
     position: int | str = int(args.position) if str(args.position).lstrip("-").isdigit() else args.position
 
     print(f"Loading {args.model} ...")
     device_map = "cuda:0" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-    model = ModelAdapter.load(args.model, dtype=dtype, device_map=device_map)
+    model = ModelAdapter.load(
+        args.model, dtype=dtype, device_map=device_map,
+        trust_remote_code=args.trust_remote_code,
+    )
     print(f"  family={model.family} n_layers={model.n_layers} d_model={model.d_model}")
 
     stims = build_stimulus_set(per_cell=args.per_cell)
