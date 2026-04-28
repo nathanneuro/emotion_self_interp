@@ -71,14 +71,17 @@ Output: per-(model, emotion, layer) direction vectors saved at `outputs/phase1_v
 - The neutral contrast set is short factual sentences. This means the diff-of-means direction picks up "emotional vs factual prose" as a side channel, visible in early-layer AUROC=1.0 but not in mid-late PCA. Add a within-emotion contrast (e.g., emotion E vs the union of other emotions) and re-evaluate.
 - Per-emotion canonical layer per model: pick from the highest-PC1↔valence layer rather than from raw AUROC (early-layer AUROC is contaminated). For Qwen2.5-0.5B: layer 10. For SmolLM2-360M: layer 24.
 
-### Phase 2 — Trained self-interpretation adapter (Pepper-style)
+### Phase 2 — Trained self-interpretation adapter (Pepper-style) — scaffold done (2026-04-28)
 
-Scalar affine `h ↦ softmax(W·(α·h + b))` over vocab, training pair `(emotion_vector, label_token_string)`.
+Scalar affine `h ↦ α·h + b` injected at one residual position; frozen base model; cross-entropy loss on the next-token emotion label.
 
-- [ ] `src/adapters/scalar_affine.py` — minimal d+1 parameter adapter, plus a bias-only baseline and a full-rank baseline for Experiment 2.
-- [ ] Training loop: standard cross-entropy on label tokens, frozen base model, hooks inject `α·h + b` into the residual stream at the chosen layer.
-- [ ] Evaluation: top-k label accuracy on held-out emotion vectors; generation-scoring (model-graded) on held-out vectors.
-- [ ] Untrained SelfIE baseline at the same site, for the "training matters" comparison Experiment 1 needs.
+- [x] `src/adapters/scalar_affine.py` — three variants: ScalarAffineAdapter (d+1), BiasOnlyAdapter (d), FullRankAdapter (d²+d). Unit-tested.
+- [x] `src/adapters/train.py` — training loop with residual-replace hook at a chosen `(layer, token_position)`, Adam optimizer over adapter params only, top-1 evaluation. Tokenizer auto-extends with an `<ACT>` sentinel if needed.
+- [x] `scripts/train_adapters.py` — Phase 1 stimuli → per-prompt residuals → train all three variants → eval on naturalistic held-out set.
+- [x] Untrained SelfIE-style baseline (α=1, b=0) included for the "training matters" comparison.
+- [ ] **Generation-scored evaluation** (model-graded). Top-1 token accuracy is much harsher than Pepper's gen-scoring; add gen-scoring before drawing strong conclusions about adapter quality at small scale.
+- [ ] **Scale-up.** The scalar_affine vs full_rank gap (chance vs 35%) at 0.5B is consistent with Pepper's bias-prior finding but harder to extrapolate from. Re-run on 7B-class once GPUs are free; expect scalar_affine to close the gap.
+- [ ] **Robustness.** Add early stopping (val_loss minimum) — scalar_affine and full_rank both train to 100% and degrade.
 
 ### Phase 3 — Behavioral utility measurements (Ren-style)
 
@@ -132,7 +135,7 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 |---|---|---|
 | 0 — Infra | **done** (2026-04-28) | ModelAdapter, extract, steer, stimuli, run_dir; 9/9 tests pass on Qwen2.5-0.5B |
 | 1 — Vectors | **v0 done** (2026-04-28) | Geometry replicates on 7 architectures (qwen2, llama, gemma2, gemma3, ouro, monet, rwkv7); best \|PC1↔valence\| ranges 0.848–0.998. Ouro: valence builds across loop iterations (0.35→0.98). Monet: 5× scaling within architecture lifts \|r\| from 0.85 to 0.998 |
-| 2 — Adapter | not started | depends on Phase 1 |
+| 2 — Adapter | **scaffold done** (2026-04-28) | All three Pepper variants implemented + train loop. Tiny Qwen2.5-0.5B run reproduces the bias-prior pattern: bias_only → chance, scalar_affine overfits, full_rank generalizes best. Add gen-scoring + scale up next. |
 | 3 — Behavior | not started | parallelizable with Phase 1/2 |
 | 4 — Causal | not started | depends on Phase 1 |
 | 5 — Exp 1 | not started | minimal viable result |
