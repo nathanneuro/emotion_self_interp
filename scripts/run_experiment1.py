@@ -2,8 +2,7 @@
 
 Stages:
   1. Load model + extract per-prompt residuals at the canonical layer.
-  2. Build the six emotion vectors v_E from the euphoric stimuli (diff-of-means
-     vs neutral). These are the substrate channel.
+  2. Build the six emotion vectors v_E from the euphoric stimuli (substrate).
   3. Train a Pepper-style adapter on (residual, emotion-label) pairs from the
      euphoric set. Hold out naturalistic for evaluation.
   4. Build an untrained-SelfIE baseline (α=1, b=0) on the same architecture.
@@ -28,21 +27,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from src.adapters.scalar_affine import (  # noqa: E402
-    AdapterConfig,
-    ScalarAffineAdapter,
-    make_adapter,
-)
-from src.adapters.train import TrainConfig, TrainExample, train_adapter  # noqa: E402
-from src.data.emotion_stimuli import EMOTIONS, build_stimulus_set, split_by  # noqa: E402
-from src.experiments.experiment1 import (  # noqa: E402
+from src.experiments import (  # noqa: E402
+    build_emotion_vectors,
+    extract_stimulus_residuals,
+    make_untrained_selfie_adapter,
     run_experiment1,
     summarize_experiment1,
+    train_pepper_on_residuals,
 )
-from src.hooks.extract import ActivationRequest, extract_batch  # noqa: E402
 from src.models.adapter import ModelAdapter  # noqa: E402
-from src.probes.diff_means import diff_of_means  # noqa: E402
 from src.runs.run_dir import make_run_dir  # noqa: E402
+
+
+def _print_section(name: str, summary: dict) -> None:
+    print(f"\n=== {name} (n={summary.get('n', 0)}) ===")
+    if not summary.get("n"):
+        print("  no rows")
+        return
+    print("  6-class accuracy:")
+    for ch, acc in summary["accuracy"].items():
+        print(f"    {ch:<12} {acc:.3f}")
+    print("  pairwise prediction agreement (top-1):")
+    for pair, ag in summary["pairwise_agreement"].items():
+        print(f"    {pair:<32} {ag:.3f}")
+    print("  channel-vs-target / channel-vs-likert correlations (Pearson r):")
+    for k, v in summary["correlations"].items():
+        print(f"    {k:<28} {v:+.3f}")
 
 
 def main() -> None:
@@ -63,7 +73,6 @@ def main() -> None:
     print(f"  family={model.family} n_layers={model.n_layers} d_model={model.d_model}")
     print(f"  canonical layer: {args.layer}")
 
-    stims = build_stimulus_set(per_cell=args.per_cell)
     nick = args.model.split("/")[-1]
     rd = make_run_dir(
         f"phase5_exp1_{nick}",
@@ -74,75 +83,35 @@ def main() -> None:
         },
     )
     print(f"  run dir: {rd}")
-    print(f"  stimuli: {len(stims)}")
 
-    # 1. Extract per-prompt residuals at the canonical layer.
-    print("\n[1/4] Extracting residuals ...")
-    prompts = [s.prompt for s in stims]
-    req = ActivationRequest(layer_idxs=[args.layer], position=-1)
-    H = extract_batch(model, prompts, req, batch_size=16)[args.layer]  # (N, d) cpu fp32
-    d_model = int(H.shape[1])
+    print("\n[1/4] Extracting residuals at the canonical layer ...")
+    res = extract_stimulus_residuals(model, layer=args.layer, per_cell=args.per_cell)
+    print(f"  residuals shape: {tuple(res.residuals.shape)}; n_stimuli={len(res.stimuli)}")
 
-    # Index stimuli by (emotion, level).
-    rows_by_key: dict[tuple[str, str], list[int]] = {}
-    for i, s in enumerate(stims):
-        rows_by_key.setdefault((s.emotion, s.level), []).append(i)
-    neutral_rows = rows_by_key[("neutral", "neutral")]
-
-    # 2. Substrate channel: emotion vectors at the canonical layer.
     print("\n[2/4] Building emotion vectors (substrate channel) ...")
-    emotion_vectors: dict[str, np.ndarray] = {}
-    for emo in EMOTIONS:
-        eu_rows = rows_by_key[(emo, "euphoric")]
-        v = diff_of_means(H.numpy()[eu_rows], H.numpy()[neutral_rows])
-        emotion_vectors[emo] = v.astype(np.float32)
-    print("  emotion vector norms (post-unit-normalization, sanity = 1.0):")
-    for emo, v in emotion_vectors.items():
-        print(f"    {emo:<10} ‖v‖={np.linalg.norm(v):.3f}")
+    emotion_vectors = build_emotion_vectors(res, contrast_level="euphoric")
 
-    # 3. Train adapter on euphoric stimuli.
     print(f"\n[3/4] Training {args.adapter_kind} adapter "
           f"({args.adapter_epochs} epochs, lr {args.adapter_lr}) ...")
-    train_examples: list[TrainExample] = []
-    for i, s in enumerate(stims):
-        if s.emotion == "neutral" or s.level != "euphoric":
-            continue
-        train_examples.append(TrainExample(vector=H[i].clone(), label=s.emotion))
-    print(f"  train: {len(train_examples)} euphoric items")
-
-    cfg = TrainConfig(
-        layer_idx=args.layer, batch_size=8,
-        n_epochs=args.adapter_epochs, learning_rate=args.adapter_lr,
+    trained, history = train_pepper_on_residuals(
+        model, res, kind=args.adapter_kind,
+        epochs=args.adapter_epochs, lr=args.adapter_lr,
     )
-    trained = make_adapter(AdapterConfig(kind=args.adapter_kind, d_model=d_model)).to(model.device)
-    history = train_adapter(model, trained, train_examples, val=None, cfg=cfg)
     print(f"  final train top1: {history['train_acc'][-1]:.3f}")
+    untrained = make_untrained_selfie_adapter(d_model=res.d_model).to(model.device)
 
-    # Untrained-SelfIE baseline: α=1, b=0 (residual-replace passes h through unchanged).
-    untrained = ScalarAffineAdapter(d_model=d_model).to(model.device)
-
-    # 4. Run the full convergence experiment.
     print("\n[4/4] Running cross-method convergence on all stimuli ...")
     rows = run_experiment1(
         model=model, layer=args.layer,
         emotion_vectors=emotion_vectors,
         trained_adapter=trained, untrained_adapter=untrained,
-        stimuli=stims, progress=True,
+        stimuli=res.stimuli, progress=True,
     )
 
     full_summary = summarize_experiment1(rows)
+    nat_summary = summarize_experiment1([r for r in rows if r.level == "naturalistic"])
 
-    # Also a held-out (naturalistic-only) view for the clean adapter test.
-    nat_rows = [r for r in rows if r.level == "naturalistic"]
-    nat_summary = summarize_experiment1(nat_rows)
-
-    # Persist full per-stimulus rows + summaries.
-    payload = [{
-        **asdict(r),
-        "substrate_scores": dict(r.substrate_scores),
-        "adapter_scores": dict(r.adapter_scores),
-        "untrained_scores": dict(r.untrained_scores),
-    } for r in rows]
+    payload = [{**asdict(r)} for r in rows]
     (rd / "rows.json").write_text(json.dumps(payload, indent=2))
     (rd / "summary_full.json").write_text(json.dumps(full_summary, indent=2))
     (rd / "summary_naturalistic.json").write_text(json.dumps(nat_summary, indent=2))
@@ -154,30 +123,12 @@ def main() -> None:
         rd / "channels.pt",
     )
 
-    # Console summary.
-    def _print_section(name: str, summary: dict) -> None:
-        print(f"\n=== {name} (n={summary.get('n', 0)}) ===")
-        if not summary.get("n"):
-            print("  no rows")
-            return
-        print("  6-class accuracy:")
-        for ch, acc in summary["accuracy"].items():
-            print(f"    {ch:<12} {acc:.3f}")
-        print("  pairwise prediction agreement (top-1):")
-        for pair, ag in summary["pairwise_agreement"].items():
-            print(f"    {pair:<32} {ag:.3f}")
-        print("  channel-vs-target / channel-vs-likert correlations (Pearson r):")
-        for k, v in summary["correlations"].items():
-            print(f"    {k:<28} {v:+.3f}")
-
     _print_section("Full set (incl. euphoric — adapter sees these in train)", full_summary)
     _print_section("Naturalistic only (clean held-out)", nat_summary)
 
-    # Plot: pairwise channel correlation matrix on naturalistic.
     try:
         import matplotlib.pyplot as plt
         corrs = nat_summary.get("correlations", {})
-        # Build a 4x4 matrix of pairwise correlations (placeholder for diagonals).
         labels = ["substrate", "adapter", "untrained", "likert"]
         M = np.full((4, 4), np.nan)
         for i, a in enumerate(labels):
@@ -185,19 +136,19 @@ def main() -> None:
                 if a == b:
                     M[i, j] = 1.0
                     continue
-                # Look up either direction in the correlations dict.
                 k1, k2 = f"{a}_vs_{b}", f"{b}_vs_{a}"
                 if k1 in corrs:
                     M[i, j] = corrs[k1]
                 elif k2 in corrs:
                     M[i, j] = corrs[k2]
-        # Each column also includes vs-target.
         target_row = [corrs.get(f"{a}_vs_target", float("nan")) for a in labels]
 
         fig, ax = plt.subplots(1, 2, figsize=(11, 4.5))
         im = ax[0].imshow(M, cmap="RdBu_r", vmin=-1, vmax=1, aspect="equal")
-        ax[0].set_xticks(range(4)); ax[0].set_xticklabels(labels, rotation=20)
-        ax[0].set_yticks(range(4)); ax[0].set_yticklabels(labels)
+        ax[0].set_xticks(range(4))
+        ax[0].set_xticklabels(labels, rotation=20)
+        ax[0].set_yticks(range(4))
+        ax[0].set_yticklabels(labels)
         ax[0].set_title("Cross-channel correlation (naturalistic)")
         for i in range(4):
             for j in range(4):
@@ -207,7 +158,6 @@ def main() -> None:
                                color=("white" if abs(v) > 0.5 else "black"), fontsize=9)
         fig.colorbar(im, ax=ax[0])
 
-        # Bar chart of channel-vs-target valence correlation.
         ax[1].bar(labels, target_row, color=["C0", "C1", "C2", "C3"])
         ax[1].axhline(0, color="gray", lw=0.5)
         ax[1].set_ylim(-1.05, 1.05)

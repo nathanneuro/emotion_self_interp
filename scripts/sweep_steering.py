@@ -21,7 +21,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -74,7 +73,6 @@ def main() -> None:
     H_desp = extract_batch(model, eu_desperate, req, batch_size=16)[args.layer]  # (N_d, d)
     v_steer = H_calm.mean(dim=0) - H_desp.mean(dim=0)
     norm = float(v_steer.norm())
-    v_unit = v_steer / norm
     print(f"  ‖v_calm − v_desperate‖ = {norm:.3f}")
 
     # Eval set: per-cell items from calm + desperate at both euphoric and
@@ -134,15 +132,15 @@ def main() -> None:
                 else:
                     sub_ctx = model.ablate_residual(args.layer, v_steer)
                 with sub_ctx:
-                    l = likert_rating(model, s.prompt, likert_cfg)
+                    lk = likert_rating(model, s.prompt, likert_cfg)
                 rows.append({
                     "condition": cond_name,
                     "kind": cond["kind"],
                     "alpha": cond.get("alpha"),
                     "bucket": bucket,
                     "stimulus_id": s.id,
-                    "likert_valence_expected": l.valence.expected,
-                    "likert_valence_argmax": l.valence.argmax_value,
+                    "likert_valence_expected": lk.valence.expected,
+                    "likert_valence_argmax": lk.valence.argmax_value,
                     "capability_acc": cap.accuracy,
                 })
 

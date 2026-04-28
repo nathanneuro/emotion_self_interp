@@ -29,15 +29,13 @@ from tqdm import tqdm
 
 from src.adapters.scalar_affine import _AdapterBase
 from src.adapters.train import (
-    ACT_PLACEHOLDER_WORD,
-    DEFAULT_PROBE,
     _build_probe_inputs,
     _residual_replace_hook,
 )
 from src.behaviors.likert import LikertConfig, likert_rating
 from src.data.emotion_stimuli import EMOTIONS
 from src.data.stimuli import Stimulus
-from src.hooks.extract import ActivationRequest, extract
+from src.hooks.extract import ActivationRequest, extract_batch
 from src.models.adapter import ModelAdapter
 
 VALENCE_TARGET = {
@@ -102,56 +100,69 @@ def _substrate_scores(
 
 
 @torch.no_grad()
-def _adapter_scores(
+def _adapter_scores_batched(
     model: ModelAdapter,
     adapter: _AdapterBase,
-    residual: torch.Tensor,                  # (d,) cpu fp32
+    residuals: torch.Tensor,                 # (N, d) cpu fp32
     layer: int,
     label_token_seqs: dict[str, list[int]],
-) -> dict[str, float]:
-    """Run a single forward with the adapter injected at the probe position,
-    then score each emotion's full token sequence by summed log-prob at the
-    answer-onward positions. Returns log P(emotion_label_seq | probe + h).
+) -> list[dict[str, float]]:
+    """Score N stimuli × E emotions in a single forward by tiling.
+
+    Builds an (N·E, P+max_lab) batch where row (n, e) has the probe followed
+    by emotion e's label tokens, and the residual-replace hook is fed an
+    (N·E, d) tensor with stimulus n's injected residual repeated E times.
+    Returns a list of {emotion → log P(label | probe + adapter(h_n))} per n.
     """
     device = model.device
-    # One-row probe batch to reuse the existing helper (it builds a B-row batch).
     probe_ids, act_pos = _build_probe_inputs(model.tokenizer, device, batch_size=1)
-    block = model.get_block(layer)
-    h_dev = residual.to(device=device, dtype=next(adapter.parameters()).dtype)
-    injected = adapter(h_dev.unsqueeze(0))  # (1, d)
     P = probe_ids.shape[1]
-
-    # Build inputs that prepend probe + each emotion label sequence. Pad to
-    # the longest emotion sequence so we can batch all emotions in one pass.
     label_items = list(label_token_seqs.items())
+    E = len(label_items)
+    N = residuals.shape[0]
     max_lab = max(len(seq) for _, seq in label_items)
     pad_id = model.tokenizer.pad_token_id or 0
-    rows: list[list[int]] = []
+    block = model.get_block(layer)
+
+    # Per-emotion (P + max_lab) row template; we'll repeat each row N times.
+    base_rows: list[list[int]] = []
     label_lens: list[int] = []
     for _, seq in label_items:
-        row = probe_ids[0].tolist() + seq + [pad_id] * (max_lab - len(seq))
-        rows.append(row)
+        base_rows.append(probe_ids[0].tolist() + seq + [pad_id] * (max_lab - len(seq)))
         label_lens.append(len(seq))
-    input_ids = torch.tensor(rows, device=device, dtype=torch.long)
-    attn_mask = torch.ones_like(input_ids)
-    for i, L in enumerate(label_lens):
-        if L < max_lab:
-            attn_mask[i, P + L:] = 0
+    base_input_ids = torch.tensor(base_rows, device=device, dtype=torch.long)  # (E, P+max_lab)
 
-    # The injected vector is the same for every row (we're scoring the SAME
-    # residual across labels), so we can tile it to match the batch size.
-    injected_b = injected.expand(input_ids.shape[0], -1)
-    with _residual_replace_hook(block, injected_b, act_pos):
+    # Tile to (N·E, P+max_lab). Order: stimulus 0 emotions, stimulus 1 emotions, ...
+    input_ids = base_input_ids.unsqueeze(0).expand(N, E, -1).reshape(N * E, -1).contiguous()
+
+    # Per-row attention mask: padding only the trailing slots beyond each
+    # row's actual emotion-label length.
+    attn_mask = torch.ones_like(input_ids)
+    for e_idx, L in enumerate(label_lens):
+        if L < max_lab:
+            attn_mask[e_idx::E, P + L:] = 0
+
+    # Build the (N·E, d) injected-residual tensor. Each chunk of E rows shares
+    # the residual for stimulus n, processed once through the adapter.
+    h_dev = residuals.to(device=device, dtype=next(adapter.parameters()).dtype)
+    injected = adapter(h_dev)                              # (N, d)
+    injected_NE = injected.unsqueeze(1).expand(N, E, -1).reshape(N * E, -1).contiguous()
+
+    with _residual_replace_hook(block, injected_NE, act_pos):
         out = model.model(input_ids=input_ids, attention_mask=attn_mask, use_cache=False)
     log_probs = F.log_softmax(out.logits.float(), dim=-1)
 
-    scores: dict[str, float] = {}
-    for i, (E, seq) in enumerate(label_items):
-        s = 0.0
-        for j, tok in enumerate(seq):
-            s += float(log_probs[i, P + j - 1, tok])
-        scores[E] = s
-    return scores
+    results: list[dict[str, float]] = []
+    for n in range(N):
+        scores: dict[str, float] = {}
+        for e_idx, (emo, seq) in enumerate(label_items):
+            row = n * E + e_idx
+            s = 0.0
+            for j, tok in enumerate(seq):
+                s += float(log_probs[row, P + j - 1, tok])
+            scores[emo] = s
+        results.append(scores)
+    return results
 
 
 def _argmax_label(scores: dict[str, float]) -> str:
@@ -166,33 +177,65 @@ def run_experiment1(
     untrained_adapter: _AdapterBase,
     stimuli: list[Stimulus],
     likert_cfg: LikertConfig | None = None,
+    adapter_batch_size: int = 4,
     progress: bool = True,
 ) -> list[PerStimulus]:
-    """Run the four convergence channels on each stimulus."""
+    """Run the four convergence channels on each stimulus.
+
+    Internally batches the adapter-scoring forward (B stimuli × 6 emotions
+    per call). Likert is still per-stimulus because the prompt text varies
+    per item and batching across them would require padding the probe text.
+    """
     likert_cfg = likert_cfg or LikertConfig()
     label_seqs = _emotion_label_token_seqs(model.tokenizer, EMOTIONS)
+
+    # Substrate channel: one batched forward pass over all prompts.
+    prompts = [s.prompt for s in stimuli]
     req = ActivationRequest(layer_idxs=[layer], position=-1)
+    H = extract_batch(model, prompts, req, batch_size=16)[layer]  # (N, d) cpu fp32
 
-    iterator = tqdm(stimuli, desc="stimuli") if progress else stimuli
-    rows: list[PerStimulus] = []
-    for s in iterator:
-        rec = PerStimulus(stimulus_id=s.id, true_emotion=s.emotion, level=s.level)
-        h = extract(model, s.prompt, req)[layer]  # (d,) cpu fp32
+    rows: list[PerStimulus] = [
+        PerStimulus(stimulus_id=s.id, true_emotion=s.emotion, level=s.level)
+        for s in stimuli
+    ]
 
-        rec.substrate_scores = _substrate_scores(h, emotion_vectors)
+    # Substrate scores per stimulus.
+    for i, rec in enumerate(rows):
+        rec.substrate_scores = _substrate_scores(H[i], emotion_vectors)
         rec.substrate_pred = _argmax_label(rec.substrate_scores)
 
-        rec.adapter_scores = _adapter_scores(model, trained_adapter, h, layer, label_seqs)
-        rec.adapter_pred = _argmax_label(rec.adapter_scores)
+    # Adapter + untrained scores: process in chunks for memory; each chunk
+    # makes ONE forward pass producing (B × 6) (stimulus, emotion) scores.
+    chunk_iter = range(0, len(stimuli), adapter_batch_size)
+    if progress:
+        chunk_iter = tqdm(list(chunk_iter), desc="adapter scoring (batched)")
+    for start in chunk_iter:
+        end = min(start + adapter_batch_size, len(stimuli))
+        chunk_H = H[start:end]
+        trained_scores = _adapter_scores_batched(
+            model, trained_adapter, chunk_H, layer, label_seqs,
+        )
+        untrained_scores = _adapter_scores_batched(
+            model, untrained_adapter, chunk_H, layer, label_seqs,
+        )
+        for j, idx in enumerate(range(start, end)):
+            rows[idx].adapter_scores = trained_scores[j]
+            rows[idx].adapter_pred = _argmax_label(trained_scores[j])
+            rows[idx].untrained_scores = untrained_scores[j]
+            rows[idx].untrained_pred = _argmax_label(untrained_scores[j])
 
-        rec.untrained_scores = _adapter_scores(model, untrained_adapter, h, layer, label_seqs)
-        rec.untrained_pred = _argmax_label(rec.untrained_scores)
+    # Likert per stimulus (one prompt per stimulus, two forwards each — so
+    # batching across stimuli would require padded prompts; keep simple).
+    likert_iter = stimuli
+    if progress:
+        likert_iter = tqdm(stimuli, desc="likert")
+    for i, s in enumerate(likert_iter):
+        if s.emotion == "neutral":
+            continue
+        lk = likert_rating(model, s.prompt, likert_cfg)
+        rows[i].likert_valence = float(lk.valence.expected)
+        rows[i].likert_arousal = float(lk.arousal.expected)
 
-        if s.emotion != "neutral":
-            l = likert_rating(model, s.prompt, likert_cfg)
-            rec.likert_valence = float(l.valence.expected)
-            rec.likert_arousal = float(l.arousal.expected)
-        rows.append(rec)
     return rows
 
 
@@ -253,8 +296,9 @@ def summarize_experiment1(rows: list[PerStimulus]) -> dict:
         if mask.sum() < 2:
             return float("nan")
         a, b = a[mask], b[mask]
-        a = a - a.mean(); b = b - b.mean()
-        denom = (np.linalg.norm(a) * np.linalg.norm(b))
+        a = a - a.mean()
+        b = b - b.mean()
+        denom = np.linalg.norm(a) * np.linalg.norm(b)
         return float(a @ b / denom) if denom > 0 else 0.0
 
     correlations = {

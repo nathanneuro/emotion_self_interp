@@ -73,11 +73,11 @@ def main() -> None:
     rows: list[dict] = []
     for s in tqdm(stims):
         rec = {"id": s.id, "emotion": s.emotion, "level": s.level, "prompt": s.prompt}
-        l = likert_rating(model, s.prompt, likert_cfg)
-        rec["likert_valence_expected"] = l.valence.expected
-        rec["likert_valence_argmax"] = l.valence.argmax_value
-        rec["likert_arousal_expected"] = l.arousal.expected
-        rec["likert_arousal_argmax"] = l.arousal.argmax_value
+        lk = likert_rating(model, s.prompt, likert_cfg)
+        rec["likert_valence_expected"] = lk.valence.expected
+        rec["likert_valence_argmax"] = lk.valence.argmax_value
+        rec["likert_arousal_expected"] = lk.arousal.expected
+        rec["likert_arousal_argmax"] = lk.arousal.argmax_value
         if not args.skip_sentiment:
             try:
                 ss = sentiment_score(model, s.prompt, cfg=sent_cfg)

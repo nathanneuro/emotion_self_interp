@@ -10,7 +10,7 @@ from __future__ import annotations
 import contextlib
 import sys
 from dataclasses import dataclass
-from typing import Callable, Iterator
+from typing import Iterator
 
 import torch
 from torch import nn

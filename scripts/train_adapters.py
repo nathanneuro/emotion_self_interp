@@ -27,8 +27,7 @@ from src.adapters.train import (  # noqa: E402
     evaluate_adapter,
     train_adapter,
 )
-from src.data.emotion_stimuli import EMOTIONS, build_stimulus_set  # noqa: E402
-from src.hooks.extract import ActivationRequest, extract_batch  # noqa: E402
+from src.experiments.protocol import extract_stimulus_residuals  # noqa: E402
 from src.models.adapter import ModelAdapter  # noqa: E402
 from src.runs.run_dir import make_run_dir  # noqa: E402
 
@@ -50,8 +49,6 @@ def main() -> None:
     model = ModelAdapter.load(args.model, dtype=dtype, device_map=device_map)
     print(f"  family={model.family} n_layers={model.n_layers} d_model={model.d_model}")
 
-    # Phase 1 stimuli; we'll extract per-prompt residuals at the chosen layer.
-    stims = build_stimulus_set(per_cell=args.per_cell)
     nick = args.model.split("/")[-1]
     rd = make_run_dir(
         f"phase2_train_{nick}",
@@ -59,25 +56,21 @@ def main() -> None:
             "model": args.model, "layer": args.layer,
             "per_cell": args.per_cell,
             "epochs": args.epochs, "lr": args.lr, "batch_size": args.batch_size,
-            "stimulus_set_size": len(stims),
         },
     )
     print(f"  run dir: {rd}")
 
     print("Extracting per-prompt residuals at canonical layer ...")
-    prompts = [s.prompt for s in stims]
-    req = ActivationRequest(layer_idxs=[args.layer], position=-1)
-    H = extract_batch(model, prompts, req, batch_size=16)[args.layer]  # (N, d) cpu fp32
-    d_model = int(H.shape[1])
+    res = extract_stimulus_residuals(model, layer=args.layer, per_cell=args.per_cell)
+    d_model = res.d_model
 
-    # Train on euphoric, evaluate on naturalistic. (Neutral isn't an emotion
-    # label, so it's only used for sanity contrasts — not for adapter fit.)
+    # Train on euphoric, evaluate on naturalistic.
     train_examples: list[TrainExample] = []
     val_examples: list[TrainExample] = []
-    for i, s in enumerate(stims):
+    for i, s in enumerate(res.stimuli):
         if s.emotion == "neutral":
             continue
-        ex = TrainExample(vector=H[i].clone(), label=s.emotion)
+        ex = TrainExample(vector=res.residuals[i].clone(), label=s.emotion)
         if s.level == "euphoric":
             train_examples.append(ex)
         elif s.level == "naturalistic":

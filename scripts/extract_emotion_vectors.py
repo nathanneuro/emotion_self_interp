@@ -25,7 +25,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import numpy as np  # noqa: E402
 import torch  # noqa: E402
 
-from src.data.emotion_stimuli import EMOTIONS, build_stimulus_set, split_by  # noqa: E402
+from src.data.emotion_stimuli import EMOTIONS, build_stimulus_set  # noqa: E402
 from src.hooks.extract import ActivationRequest, extract_batch  # noqa: E402
 from src.models.adapter import ModelAdapter  # noqa: E402
 from src.probes.diff_means import diff_of_means, probe_separation  # noqa: E402

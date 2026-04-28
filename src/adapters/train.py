@@ -19,10 +19,9 @@ model to describe it.
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass, field
-from typing import Iterable, Iterator
+from dataclasses import dataclass
+from typing import Iterator
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
