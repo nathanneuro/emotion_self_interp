@@ -8,6 +8,13 @@ from src.experiments.experiment2 import (
     evaluate_adapter_bias_prior,
     summarize_reports,
 )
+from src.experiments.experiment4 import (
+    SWAP_PAIRING,
+    IntrospectionRow,
+    measure_introspection,
+    summarize_introspection,
+    train_honest_and_deceptive_adapters,
+)
 from src.experiments.protocol import (
     StimulusResiduals,
     build_emotion_vectors,
@@ -23,6 +30,11 @@ __all__ = [
     "BiasPriorReport",
     "evaluate_adapter_bias_prior",
     "summarize_reports",
+    "SWAP_PAIRING",
+    "IntrospectionRow",
+    "measure_introspection",
+    "summarize_introspection",
+    "train_honest_and_deceptive_adapters",
     "StimulusResiduals",
     "extract_stimulus_residuals",
     "build_emotion_vectors",

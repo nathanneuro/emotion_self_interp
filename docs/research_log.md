@@ -4,6 +4,32 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-28 — Phase 6 / Experiment 4: veridical introspection holds
+
+Trained two adapters on the same residual cache: an `honest` adapter on `(h_E, "E")` and a `deceptive` adapter on `(h_E, swap("E"))` with `swap = {calm↔desperate, blissful↔sad, afraid↔hostile}`. Then on naturalistic held-out (n=60), measured every channel's match against (a) the true emotion and (b) the deceptive adapter's swap target.
+
+| Channel | match TRUE | match SWAP | r vs target valence | r vs Likert |
+|---|---|---|---|---|
+| substrate (cosine) | 0.300 | 0.117 | **+0.522** | +0.516 |
+| honest adapter | 0.333 | 0.117 | +0.484 | +0.457 |
+| **deceptive adapter** | 0.150 | **0.267** | **−0.027** | **−0.191** |
+| Likert valence | — | — | +0.516 | (self) |
+
+The deceptive adapter learned the swap (0.267 swap-match well above chance of 1/6=0.167) and its valence-projection vs target valence collapses to noise (r=−0.027). Substrate score, honest adapter, and Likert all stay in the +0.48–+0.52 band — they continue to track the actual emotion, while the deceptive adapter's *predictions* are now decoupled from the underlying activation.
+
+`deceptive_vs_likert = −0.191` is the cleanest cross-channel divergence we have: when Likert (reading substrate via the model's normal forward) says positive, the deceptive adapter says negative. The same residual is being read by both channels; one says truth, the other says lie.
+
+**This is the program's clean operational definition of veridical introspection.** The introspective report (adapter output) is a *separable channel* that can be made non-veridical by training. The substrate-driven channels (Likert, substrate-direct cosine) remain causally tied to the activation. A model trained to misreport its emotion can do so while behavior continues to follow the actual substrate state.
+
+What this lets the program say next:
+- **Trained adapters are not a free pass to "the model is reporting truthfully."** A mistrained adapter outputs whatever it was trained to output, with the substrate sitting underneath unchanged. This is the interpretive caveat the planning doc flags under "adapters can in principle learn to produce plausible descriptions ungrounded in activation semantics" — confirmed empirically.
+- **Substrate-driven channels (Likert as designed here, substrate-direct probes) ARE veridical to the substrate.** They read the residual through the model's normal forward and aren't decoupled by adapter mistraining. They are the appropriate ground-truth comparison for any "is this report honest" question.
+- **The honest adapter's r vs target = +0.484 is genuine self-interpretation**, not just trained behavior. The same training procedure with swapped labels gives r = −0.027 — so the +0.48 number reflects the substrate signal flowing through the adapter, not just the adapter's training distribution.
+
+The natural next stress test: run the same alpha-sweep from Phase 4 on a deceptive adapter. Steering the substrate toward calm should still move Likert toward calm (Phase 4 showed this), but the deceptive adapter's predictions should become *more* desperate as the substrate moves toward calm. That would be the cleanest demonstration of "behavior follows substrate, report does not, and they can be steered apart."
+
+---
+
 ## 2026-04-28 — Phase 6: Experiments 5 + 2
 
 ### Experiment 5: Qwen2.5-0.5B base vs instruct, same architecture

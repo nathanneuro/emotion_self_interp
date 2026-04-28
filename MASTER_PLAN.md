@@ -126,7 +126,7 @@ Status:
 
 - [x] **Experiment 2** — bias-prior decomposition (`scripts/run_experiment2.py`, `src/experiments/experiment2.py`). Adds `ScaleOnlyAdapter` (h ↦ α·h, 1 param) to round out the variants. Adds zero-vector decoding + input-shuffle test. On Qwen-0.5B-Instruct, `bias_only` sits exactly at chance and `full_rank` is fully input-conditional (shuffle returns to chance). Pepper's "bias carries 85%" caveat does *not* hold at our scale; the trained adapter is genuinely activation-conditional.
 - [x] **Experiment 3** — done as Phase 4 v0 (Lindsey-style α-sweep on Likert; monotonic causal dependence; Sofroniew's ±0.1 anchor verified at 0.5B).
-- [ ] **Experiment 4** — veridical introspection. Construct trials where the trained adapter's report and the substrate diverge (mislabeled-training and/or adversarial-steering routes). Measure whether downstream behavior tracks the substrate or the report. The biggest novel design left.
+- [x] **Experiment 4** — veridical introspection (`scripts/run_experiment4.py`, `src/experiments/experiment4.py`). Trains an honest and a deceptive (swap-labeled) adapter on the same residual cache; measures every channel's match against the true emotion and the swap target. On Qwen-0.5B-Instruct: honest +0.484, substrate +0.522, Likert +0.516 vs target valence; deceptive collapses to −0.027 (vs target) / −0.191 (vs Likert). Substrate-driven channels remain causally tied to activation; adapter output is a separable channel that can be made non-veridical by training.
 - [x] **Experiment 5** — Qwen2.5-0.5B base vs instruct, Exp 1 v1 pipeline. Substrate r vs target valence is *higher* in base (+0.572 vs +0.509); Likert r vs target jumps in instruct (+0.382 → +0.516); substrate↔Likert r climbs +0.06. Post-training reshapes the readout, not the substrate.
 
 ## Open decisions (defer until forced)
@@ -156,7 +156,7 @@ Status:
 | 5 — Exp 1 | **v1 done** (2026-04-28) | Clean 4-way convergence on Qwen-0.5B-Instruct (r=0.42–0.52 across all channels). On gemma-2-2b base substrate+adapter rise to 0.74–0.76 but Likert collapses to 0.15 — base-vs-instruct gap triangulated with Phase 3 |
 | 6 — Exp 2 | **done** (2026-04-28) | bias_only @ chance, full_rank fully input-conditional under shuffle. Pepper's bias-prior caveat is *weaker* than headline at 0.5B — adapter is not just a format prior |
 | 6 — Exp 3 | done as Phase 4 v0 | monotonic α→Likert, ±0.1 anchor verified |
-| 6 — Exp 4 | not started | veridical introspection — biggest novel design |
+| 6 — Exp 4 | **done** (2026-04-28) | Deceptive adapter learned swap; substrate / Likert / honest stay at r=+0.48–+0.52 vs target; deceptive collapses to r=−0.03 |
 | 6 — Exp 5 | **done** (2026-04-28) | Qwen-0.5B base vs instruct: substrate same/stronger in base; Likert + substrate↔Likert link strengthens with instruct. Post-training reshapes the readout, not the substrate |
 
 ## Next actions (immediate)
