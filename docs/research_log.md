@@ -4,6 +4,46 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-28 — Phase 1.5 + Experiment 1 v1: within-emotion contrast fixes substrate convergence
+
+The Exp 1 v0 substrate failure (r ≈ −0.05 vs target valence on naturalistic) was diagnosed as a contrast-confound: v_E built diff-of-means against the *neutral* set picks up "emotional vs factual prose" as a side channel that doesn't transfer to naturalistic emotional stimuli (which are already emotional and don't differ from each other in writing style). Switching to **within-emotion contrast** — v_E = mean(E) − mean(pooled other emotions) — removes the shared "emotional prose" component, leaving the per-emotion-specific direction.
+
+**Three improvements from one change:**
+
+| | v0 (neutral contrast) | v1 (other_emotions) |
+|---|---|---|
+| Qwen-0.5B layer-sweep best for `calm` | L3, AUROC 1.00 (style artifact) | L20, AUROC 0.94 |
+| Qwen-0.5B PC1↔valence | 0.975 @ L10 | **0.991 @ L14** |
+| Qwen-0.5B substrate r vs target valence (Exp 1, naturalistic) | **−0.048** | **+0.509** |
+| Qwen-0.5B substrate ↔ adapter r | +0.391 | +0.869 |
+| gemma-2-2b PC1↔valence | 0.996 @ L8 | 0.997 @ L21 |
+| gemma-2-2b substrate r vs target | (not run in v0) | +0.735 |
+| gemma-2-2b adapter r vs target | (not run in v0) | +0.760 |
+
+The v0 early-layer AUROC=1.0 we always-suspected-was-an-artifact was indeed the lexical/style component: with within-emotion contrast `calm` and `afraid` move from layer 3 (suspect) to layers 15–20 (proper mid-late). The PCA-vs-valence correlation also tightens slightly and shifts to a later canonical layer.
+
+**Substrate-vs-adapter agreement is striking** at r=+0.83–0.87 across both models. Two channels that read the same residual through completely different machinery (cosine similarity vs trained adapter + LM-head readout) produce strongly correlated valence-like scores. This is the cleanest internal-consistency check we have for the substrate-encoded valence signal.
+
+**The base-vs-instruct gap shows up again, sharper.** On gemma-2-2b base:
+- substrate r vs target = +0.735 (substrate is *strong*)
+- adapter r vs target = +0.760 (adapter trained on top of substrate, also strong)
+- **Likert r vs target = +0.148** (behavioral expression channel, weak)
+
+Substrate present, behavior weak. This is now triangulated across Phase 1 (PC1↔valence high in base), Phase 3 (Likert direction-correct only 4/6 in base), and Phase 5 v1 (Likert r vs target collapses on base while substrate/adapter scale up). Connects directly to the DPO-character-adherence note: post-training is what wires the substrate into reportable behavior.
+
+**Updated convergence picture on Qwen-0.5B-Instruct (n=60 naturalistic):**
+
+| Channel | r vs target valence |
+|---|---|
+| substrate (within-emotion) | +0.509 |
+| adapter | +0.491 |
+| untrained | +0.422 |
+| Likert | +0.516 |
+
+All four channels in the +0.42 to +0.52 band. That's the clean four-way convergence the program calls out as "the strongest available evidence that the model represents a particular functional state and can report on it veridically." We have it, on a 0.5B model, at the level of ~60 naturalistic stimuli.
+
+---
+
 ## 2026-04-28 — Phase 5 v0 / Experiment 1: cross-method convergence (and a failure mode)
 
 Ran the four convergence channels on the v0 stimulus set on Qwen2.5-0.5B-Instruct at L10:

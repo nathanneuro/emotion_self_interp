@@ -61,24 +61,53 @@ def extract_stimulus_residuals(
 def build_emotion_vectors(
     res: StimulusResiduals,
     contrast_level: str = "euphoric",
+    contrast: str = "neutral",
 ) -> dict[str, np.ndarray]:
-    """Build a per-emotion direction via diff-of-means against neutral.
+    """Build a per-emotion direction via diff-of-means.
 
-    `contrast_level`: which level of the emotion's stimuli to use as the
-    in-class set. Default "euphoric" matches Phase 1 v0.
+    Args:
+        contrast_level: which level of the emotion's stimuli to use as the
+            in-class set. "euphoric" (default) matches Phase 1 v0.
+        contrast: what to use as the out-class baseline.
+            "neutral"        — Phase 1 v0: vs the shared neutral set. Picks
+                               up "emotional prose vs factual prose" as a
+                               style confound.
+            "other_emotions" — Phase 1.5: vs the pooled euphoric stimuli of
+                               every *other* emotion. Removes the shared
+                               "emotional prose" component, leaving the
+                               per-emotion-specific direction.
     """
     rows = res.rows_by_key()
     H = res.residuals.numpy()
-    neutral_rows = rows.get(("neutral", "neutral"), [])
-    if not neutral_rows:
-        raise ValueError("no neutral stimuli found in residual cache")
     out: dict[str, np.ndarray] = {}
-    for emo in EMOTIONS:
-        in_class = rows.get((emo, contrast_level), [])
-        if not in_class:
-            raise ValueError(f"no {emo}/{contrast_level} stimuli found")
-        out[emo] = diff_of_means(H[in_class], H[neutral_rows]).astype(np.float32)
-    return out
+
+    if contrast == "neutral":
+        neutral_rows = rows.get(("neutral", "neutral"), [])
+        if not neutral_rows:
+            raise ValueError("no neutral stimuli found in residual cache")
+        for emo in EMOTIONS:
+            in_class = rows.get((emo, contrast_level), [])
+            if not in_class:
+                raise ValueError(f"no {emo}/{contrast_level} stimuli found")
+            out[emo] = diff_of_means(H[in_class], H[neutral_rows]).astype(np.float32)
+        return out
+
+    if contrast == "other_emotions":
+        for emo in EMOTIONS:
+            in_class = rows.get((emo, contrast_level), [])
+            if not in_class:
+                raise ValueError(f"no {emo}/{contrast_level} stimuli found")
+            other_rows: list[int] = []
+            for other in EMOTIONS:
+                if other == emo:
+                    continue
+                other_rows.extend(rows.get((other, contrast_level), []))
+            if not other_rows:
+                raise ValueError(f"no other-emotion {contrast_level} stimuli found for {emo}")
+            out[emo] = diff_of_means(H[in_class], H[other_rows]).astype(np.float32)
+        return out
+
+    raise ValueError(f"unknown contrast {contrast!r}; expected 'neutral' or 'other_emotions'")
 
 
 def train_pepper_on_residuals(

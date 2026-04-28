@@ -147,7 +147,8 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 | 2 — Adapter | **scaffold done** (2026-04-28) | All three Pepper variants implemented + train loop. Tiny Qwen2.5-0.5B run reproduces the bias-prior pattern: bias_only → chance, scalar_affine overfits, full_rank generalizes best. Add gen-scoring + scale up next. |
 | 3 — Behavior | **v0 done** (2026-04-28) | Likert valence channel direction-correct 6/6 on Qwen-Instruct, 4/6 on gemma base — base-vs-instruct gap clearly visible at the behavioral readout |
 | 4 — Causal | **v0 done** (2026-04-28) | Monotonic Likert-valence shift with α on Qwen-0.5B; Sofroniew's ±0.1 anchor lands in the meaningful behavioral window; capability preserved through \|α\| ≤ 0.5 |
-| 5 — Exp 1 | **v0 done** (2026-04-28) | Partial convergence on Qwen-0.5B: adapter / Likert / untrained agree (r ≈ 0.4–0.5 vs target valence), substrate channel doesn't transfer cleanly to naturalistic — Phase 1.5 within-emotion contrast is now a prereq for Exp 1 v1 |
+| 1.5 — Within-emotion contrast | **done** (2026-04-28) | substrate r vs target valence on Qwen-0.5B: −0.05 → +0.51. Three benefits: clean per-stimulus prediction, tighter PCA, no early-layer style artifact |
+| 5 — Exp 1 | **v1 done** (2026-04-28) | Clean 4-way convergence on Qwen-0.5B-Instruct (r=0.42–0.52 across all channels). On gemma-2-2b base substrate+adapter rise to 0.74–0.76 but Likert collapses to 0.15 — base-vs-instruct gap triangulated with Phase 3 |
 | 6 — Exp 2–5 | not started | sequenced post-Exp 1 |
 
 ## Next actions (immediate)

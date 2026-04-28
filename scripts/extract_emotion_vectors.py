@@ -40,6 +40,10 @@ def main() -> None:
     ap.add_argument("--per-cell", type=int, default=30)
     ap.add_argument("--no-plot", action="store_true")
     ap.add_argument("--trust-remote-code", action="store_true")
+    ap.add_argument("--contrast", default="neutral",
+                    choices=["neutral", "other_emotions"],
+                    help="v0 used 'neutral' (vs factual prose); Phase 1.5 'other_emotions' "
+                         "removes the shared 'emotional prose' style component.")
     args = ap.parse_args()
     position: int | str = int(args.position) if str(args.position).lstrip("-").isdigit() else args.position
 
@@ -57,11 +61,11 @@ def main() -> None:
 
     layer_idxs = list(range(model.n_layers))
     rd = make_run_dir(
-        f"phase1_vectors_{args.model.split('/')[-1]}",
+        f"phase1_vectors_{args.model.split('/')[-1]}_{args.contrast}",
         config={
             "model": args.model, "n_layers": model.n_layers, "d_model": model.d_model,
             "position": position, "per_cell": args.per_cell, "batch_size": args.batch_size,
-            "stimulus_set_size": len(stims),
+            "stimulus_set_size": len(stims), "contrast": args.contrast,
         },
     )
     print(f"  run dir: {rd}")
@@ -82,17 +86,32 @@ def main() -> None:
     summary_rows: list[dict] = []
     vectors: dict[str, dict[int, np.ndarray]] = {emo: {} for emo in EMOTIONS}
 
+    def _out_class_rows(emo: str) -> list[int]:
+        """Out-class rows for the diff-of-means depending on --contrast."""
+        if args.contrast == "neutral":
+            return neutral_rows
+        out: list[int] = []
+        for other in EMOTIONS:
+            if other == emo:
+                continue
+            out.extend(rows_by_key.get((other, "euphoric"), []))
+        return out
+
     for emo in EMOTIONS:
         eu_rows = rows_by_key[(emo, "euphoric")]
         nat_rows = rows_by_key[(emo, "naturalistic")]
+        out_rows = _out_class_rows(emo)
         for li in layer_idxs:
             H = acts[li].numpy()
-            v = diff_of_means(H[eu_rows], H[neutral_rows])
+            v = diff_of_means(H[eu_rows], H[out_rows])
             vectors[emo][li] = v
+            # Always score nat-vs-neutral so AUROC is comparable across runs;
+            # using v built from the chosen contrast.
             sep = probe_separation(H[nat_rows], H[neutral_rows], v)
             summary_rows.append({
                 "emotion": emo, "layer": li,
-                "n_eu": len(eu_rows), "n_nat": len(nat_rows), "n_neu": len(neutral_rows),
+                "n_eu": len(eu_rows), "n_nat": len(nat_rows),
+                "n_out": len(out_rows), "n_neu": len(neutral_rows),
                 "d_prime_nat_vs_neu": sep.d_prime,
                 "auroc_nat_vs_neu": sep.auroc,
                 "mean_proj_nat": sep.mean_pos,

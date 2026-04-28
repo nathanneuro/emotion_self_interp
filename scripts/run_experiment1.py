@@ -64,6 +64,10 @@ def main() -> None:
                     choices=["scalar_affine", "bias_only", "full_rank"])
     ap.add_argument("--adapter-epochs", type=int, default=20)
     ap.add_argument("--adapter-lr", type=float, default=5e-3)
+    ap.add_argument("--contrast", default="other_emotions",
+                    choices=["neutral", "other_emotions"],
+                    help="Substrate-vector contrast. v0 used 'neutral' (vs factual prose); "
+                         "v1 / Phase 1.5 default is 'other_emotions' (within-emotion).")
     args = ap.parse_args()
 
     print(f"Loading {args.model} ...")
@@ -75,11 +79,12 @@ def main() -> None:
 
     nick = args.model.split("/")[-1]
     rd = make_run_dir(
-        f"phase5_exp1_{nick}",
+        f"phase5_exp1_{nick}_{args.contrast}",
         config={
             "model": args.model, "layer": args.layer,
             "per_cell": args.per_cell, "adapter_kind": args.adapter_kind,
             "adapter_epochs": args.adapter_epochs, "adapter_lr": args.adapter_lr,
+            "contrast": args.contrast,
         },
     )
     print(f"  run dir: {rd}")
@@ -88,8 +93,10 @@ def main() -> None:
     res = extract_stimulus_residuals(model, layer=args.layer, per_cell=args.per_cell)
     print(f"  residuals shape: {tuple(res.residuals.shape)}; n_stimuli={len(res.stimuli)}")
 
-    print("\n[2/4] Building emotion vectors (substrate channel) ...")
-    emotion_vectors = build_emotion_vectors(res, contrast_level="euphoric")
+    print(f"\n[2/4] Building emotion vectors (substrate channel, contrast={args.contrast!r}) ...")
+    emotion_vectors = build_emotion_vectors(
+        res, contrast_level="euphoric", contrast=args.contrast,
+    )
 
     print(f"\n[3/4] Training {args.adapter_kind} adapter "
           f"({args.adapter_epochs} epochs, lr {args.adapter_lr}) ...")
