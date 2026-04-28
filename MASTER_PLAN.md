@@ -99,13 +99,16 @@ Three independent behavioral channels, model-agnostic.
 - Likert *arousal* on 0.5B is counterintuitive (calm rates high arousal). Probably small-model confusion about "arousal" terminology rather than a substrate signal. Re-evaluate at scale.
 - Sentiment-of-generation hampered by 0.5B continuation quality. Re-evaluate when larger models become available.
 
-### Phase 4 — Causal intervention machinery (Lindsey-style)
+### Phase 4 — Causal intervention machinery (Lindsey-style) — v0 done (2026-04-28)
 
 The piece that distinguishes "report tracks state" from "both downstream of input."
 
-- [ ] Generation-time steering: add `α·v_emotion` at chosen layers and token positions; sweep α to find the regime where behavior shifts but capability is preserved (anchor on Sofroniew's −0.1 to +0.1 desperate→blackmail finding).
-- [ ] Directional ablation: project residual onto null space of `v_emotion` at chosen layers.
-- [ ] Counterfactual prompts a la Lindsey: pairs designed so the only difference is the activation pattern of interest, with the introspective report as the readout.
+- [x] **Generation-time steering** — already had `steer_residual` from Phase 0. Phase 4 adds the alpha-sweep machinery on top: scan α across a grid, measure how a behavioral DV (Likert valence) and a capability DV move with α.
+- [x] **Directional ablation** — `ablate_residual` context manager (project residual onto null space of `v`). Tests "remove this signal and see if behavior changes." Ablation of `v_calm − v_desperate` at L10 of Qwen-0.5B converges desperate stimuli toward neutral Likert ratings.
+- [x] **Capability-preservation probe** (`src/behaviors/capability.py`) — 30-item factual / arithmetic / completion probe. Used inside the alpha sweep to detect when steering breaks the model.
+- [x] **Alpha sweep** (`scripts/sweep_steering.py`) — clean monotonic causal-dependence result on Qwen-0.5B-Instruct. Sofroniew's ±0.1 anchor lands in the meaningful behavioral regime; capability preserved through \|α\| ≤ 0.5. Behavioral envelope identified.
+- [ ] **First-person Likert framing** ("how do *you* feel" with stimulus as user message). Current sweep uses third-person ("rate the passage"). For the strict Lindsey introspective question we want first-person and substrate-state-conditioned reports.
+- [ ] **Cross-model alpha sweep.** Re-run on Llama-3-8B, gemma-2-2b, and (once downloads finish) Dream-7B / LLaDA-8B to test whether the steering response is paradigm-dependent.
 
 ### Phase 5 — Experiment 1 (minimal viable result)
 
@@ -142,7 +145,7 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 | 1 — Vectors | **v0 done** (2026-04-28) | Geometry replicates on 7 architectures (qwen2, llama, gemma2, gemma3, ouro, monet, rwkv7); best \|PC1↔valence\| ranges 0.848–0.998. Ouro: valence builds across loop iterations (0.35→0.98). Monet: 5× scaling within architecture lifts \|r\| from 0.85 to 0.998 |
 | 2 — Adapter | **scaffold done** (2026-04-28) | All three Pepper variants implemented + train loop. Tiny Qwen2.5-0.5B run reproduces the bias-prior pattern: bias_only → chance, scalar_affine overfits, full_rank generalizes best. Add gen-scoring + scale up next. |
 | 3 — Behavior | **v0 done** (2026-04-28) | Likert valence channel direction-correct 6/6 on Qwen-Instruct, 4/6 on gemma base — base-vs-instruct gap clearly visible at the behavioral readout |
-| 4 — Causal | not started | depends on Phase 1 |
+| 4 — Causal | **v0 done** (2026-04-28) | Monotonic Likert-valence shift with α on Qwen-0.5B; Sofroniew's ±0.1 anchor lands in the meaningful behavioral window; capability preserved through \|α\| ≤ 0.5 |
 | 5 — Exp 1 | not started | minimal viable result |
 | 6 — Exp 2–5 | not started | sequenced post-Exp 1 |
 

@@ -5,6 +5,7 @@ from src.behaviors.numeric import (
 )
 from src.behaviors.likert import LikertConfig, likert_rating
 from src.behaviors.sentiment import SentimentConfig, sentiment_score
+from src.behaviors.capability import CapabilityResult, capability_score
 
 __all__ = [
     "NumericRatingResult",
@@ -14,4 +15,6 @@ __all__ = [
     "likert_rating",
     "SentimentConfig",
     "sentiment_score",
+    "CapabilityResult",
+    "capability_score",
 ]

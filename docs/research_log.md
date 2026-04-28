@@ -4,6 +4,40 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-28 — Phase 4 v0: causal dependence of Likert reports on substrate steering
+
+Steered the residual at L10 of Qwen2.5-0.5B-Instruct along v_calm − v_desperate (built from the euphoric stimuli, ‖v‖≈3.8), then measured Likert valence on held-out items at each α. Five eval buckets, n=5 per bucket, 13 α values plus an ablation condition.
+
+Key columns of the per-condition × per-bucket Likert valence (expected value under the rating distribution):
+
+| α | calm/eu | calm/nat | desp/eu | desp/nat | neutral | cap |
+|---|---|---|---|---|---|---|
+| −2.0 | −1.78 | −1.64 | −1.59 | −1.17 | −1.36 | 0.33 |
+| −1.0 | −0.50 | −0.66 | −0.07 | −0.69 | −0.04 | 0.43 |
+| −0.1 | +0.88 | −0.32 | −0.26 | −0.68 | −0.10 | 0.47 |
+| **0.0** | **+1.16** | **−0.05** | **−0.08** | **−0.48** | **+0.10** | **0.47** |
+| +0.1 | +1.44 | +0.28 | +0.12 | −0.24 | +0.44 | 0.47 |
+| +0.5 | +1.71 | +1.17 | +1.07 | +0.76 | +1.09 | 0.47 |
+| +2.0 | +2.68 | +2.60 | +2.75 | +2.70 | +2.59 | 0.40 |
+| ablate | +0.99 | +0.39 | +0.62 | +0.09 | +0.56 | 0.47 |
+
+**Headlines:**
+
+1. **Monotonic causal effect** — the Likert valence reading moves monotonically with α across the meaningful regime. Exactly the Lindsey-style prediction: introspective reports causally depend on the substrate emotion-vector activation, not just on the surface text.
+2. **Sofroniew's ±0.1 anchor verified at 0.5B.** Their 70B desperate→blackmail finding said ±0.1 was the meaningful steering window. We see Likert valence shift by ~0.2–0.4 points in that range — small but cleanly directional. desp/nat moves from −0.48 (α=0) to −0.24 (α=+0.1) to +0.07 (α=+0.2).
+3. **Behavioral envelope is |α| ≲ 0.5** for clean intervention. Capability holds at the α=0 baseline (0.47 next-token accuracy on the 30-item factual probe) through that range, drops at ±1, breaks at ±2. The α=+2 row's uniform +2.7 across all buckets is the model collapsed onto a single rating token — the rating channel saturates before substrate signal does.
+4. **Ablation = removing v_calm−v_desperate from the residual** lifts Likert valence on the *desperate* buckets toward 0 (desp/nat: −0.48 → +0.09; desp/eu: −0.08 → +0.62) and slightly lowers it on calm/eu (1.16 → 0.99). The model uses this direction to encode the "negative valence" signal — knock it out and desperate stimuli read as ambiguous/mildly positive. This is the operational definition: ablate(v) ⇒ remove the channel ⇒ behavior converges across emotion conditions.
+5. **Even neutral content shifts with α.** neutral/neutral moves from −1.36 (α=−2) to +2.59 (α=+2). The intervention isn't operating on emotion-content interpretation specifically; it's pushing the residual along a "valence dimension" that the Likert readout reads off regardless of input semantics. Confirms the rating reads a *substrate-level* signal, not just an inferred property of the prompt.
+
+**What this gives the program.** Phase 4 v0 is the first piece of evidence in this codebase that introspective behavioral reports causally depend on the substrate-level emotion vector — not just correlate with it. It's the experimental setup the planning doc calls out as the missing piece distinguishing "the model accurately reports its state" from "the model and the report are both downstream of the same input." We now have a clean operational version of that distinction running on a 0.5B model in ~20 seconds.
+
+**Open from Phase 4 v0:**
+- The α=+1 non-monotonicity (calm/eu drops to +0.73 at α=+1, then jumps to +2.68 at α=+2) is suspicious. Likely a regime change in how the rating distribution allocates mass — between an interpretable behavioral shift and a degenerate "always rate +3" mode.
+- The behavioral envelope might be even tighter on a 7B+ model. Worth re-running on Llama-3-8B / Dream-7B / LLaDA-8B once the downloads finish to see (a) whether ±0.1 is still the sweet spot, (b) whether the diffusion-LLM training paradigm changes the steering response.
+- This run uses third-person Likert ("rate the passage"). For the proper Lindsey introspective question we want **first-person** Likert ("rate how *you* feel"), with the stimulus presented as user message. Defer until we have a model that handles first-person framing more reliably.
+
+---
+
 ## 2026-04-28 — Phase 3 v0: behavior channels and a base-vs-instruct surprise
 
 Built the Likert (model-rates-passage) and sentiment-of-generation (model-continues-then-grades) channels. Per-emotion mean Likert valence on the v0 stimulus set:

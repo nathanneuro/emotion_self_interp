@@ -256,6 +256,44 @@ class ModelAdapter:
                 h.remove()
 
     @contextlib.contextmanager
+    def ablate_residual(
+        self,
+        layer_idx: int,
+        vector: torch.Tensor,
+        token_mask: torch.Tensor | None = None,
+    ) -> Iterator[None]:
+        """Project the residual at `layer_idx` onto the null space of `vector`.
+
+        For unit u = vector / ‖vector‖, this replaces h with h − (h·u) u at
+        every token position (or only the masked positions). Tests "remove
+        this direction and see if behavior changes" — the counterpart to
+        steer_residual, which adds a direction.
+        """
+        block = self.get_block(layer_idx)
+        v = vector.detach()
+        v = v / (v.norm() + 1e-12)
+
+        def hook(_mod: nn.Module, _inp, out):
+            tup = isinstance(out, tuple)
+            h = out[0] if tup else out
+            v_dev = v.to(device=h.device, dtype=h.dtype)
+            # Project out the v direction. h: (B, S, d), v_dev: (d,).
+            coeff = (h @ v_dev).unsqueeze(-1)  # (B, S, 1)
+            removal = coeff * v_dev            # (B, S, d)
+            if token_mask is None:
+                h_new = h - removal
+            else:
+                m = token_mask.to(device=h.device, dtype=h.dtype).unsqueeze(-1)
+                h_new = h - m * removal
+            return (h_new, *out[1:]) if tup else h_new
+
+        handle = block.register_forward_hook(hook)
+        try:
+            yield
+        finally:
+            handle.remove()
+
+    @contextlib.contextmanager
     def steer_residual(
         self,
         layer_idx: int,
