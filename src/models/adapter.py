@@ -22,6 +22,7 @@ _SUPPORTED_FAMILIES = {
     "gemma",
     "gemma2",
     "gemma3",
+    "gemma3_text",  # text-only Gemma 3 variants report this as model_type
     "mistral",
     "olmo",
     "olmo2",

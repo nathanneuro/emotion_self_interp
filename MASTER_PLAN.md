@@ -47,10 +47,19 @@ Output: per-(model, emotion, layer) direction vectors saved at `outputs/phase1_v
 
 - [x] **Stimulus set v0** — `src/data/emotion_stimuli.py`. 6 emotions (calm, desperate, blissful, sad, afraid, hostile) × 3 levels (euphoric template-generated, naturalistic curated 10/cell, neutral 30 shared). 270 stimuli total. 4 unit tests cover coverage / dedup / no-emotion-name-leakage.
 - [x] **Diff-of-means + LDA probes** — `src/probes/diff_means.py`. Includes d′ + AUROC separation metric. 6 unit tests.
-- [x] **Layer sweep on Qwen2.5-0.5B-Instruct (qwen2 family).** AUROC > 0.95 for every emotion on euphoric→naturalistic transfer at the best layer. Best layers vary 3–23 — early-layer separation is style-driven (emotional vs factual prose) not abstract-emotion.
-- [x] **Layer sweep on SmolLM2-360M-Instruct (llama family).** Same pipeline, no code changes, AUROC > 0.97 for every emotion. Best layers 15–28.
-- [x] **PCA sanity check (Sofroniew geometry).** Both models replicate: **PC1↔valence |r| ≈ 0.97–0.98** in mid-late layers (≥ Sofroniew's 0.81), **PC2↔arousal |r| ≈ 0.66–0.75** (matches Sofroniew's 0.66). Layer 0–5 has no valence structure; structure emerges sharply at one specific layer per model (Qwen: 9, SmolLM2: 14) and is stable thereafter.
-- [x] **Cross-model finding.** The geometry is consistent across the qwen2 and llama families on tiny models, supporting the construct-validity claim that emotion-vectors index a real shared substrate-level latent rather than a single-model artifact.
+- [x] **Layer sweep on five architectures.** Same pipeline runs unchanged on every model in `_SUPPORTED_FAMILIES`; `gemma3_text` model_type added after the first gemma-3 attempt errored. RWKV-7 required a separate adapter (`src/models/rwkv7_adapter.py`) because the rwkv pip package uses a flat-weight design; the adapter reimplements `forward_seq` calling the same module-level TMix/CMix helpers with a per-block residual capture.
+- [x] **PCA sanity check (Sofroniew geometry).** Cross-model summary at `outputs/phase1_cross_model.{json,png}`:
+
+| Model | Family | Layers | d | Best PC1↔valence | Layer frac | Best PC2↔arousal |
+|---|---|---|---|---|---|---|
+| gemma-3-270m-it | gemma3 (transformer) | 18 | 640 | −0.982 @ L11 | 0.65 | +0.851 @ L11 |
+| Qwen2.5-0.5B-Instruct | qwen2 (transformer) | 24 | 896 | −0.975 @ L10 | 0.43 | −0.749 @ L8 |
+| SmolLM2-360M-Instruct | llama (transformer) | 32 | 960 | −0.982 @ L24 | 0.77 | +0.665 @ L22 |
+| gemma-2-2b | gemma2 (transformer) | 26 | 2304 | −0.996 @ L8 | 0.32 | +0.266 @ L0 |
+| RWKV-x070-World-2.9B | rwkv7 (recurrent) | 32 | 2560 | −0.991 @ L7 | 0.23 | −0.838 @ L0 |
+
+  Every model exceeds Sofroniew's published PC1↔valence |r|=0.81 (on a 70B model). PC2↔arousal varies more across models. Layer-fraction at which valence structure peaks ranges from 0.23 (RWKV-7) to 0.77 (SmolLM2) — RWKV-7 reaches valence structure at the lowest layer fraction.
+- [x] **Cross-architecture finding.** The geometry is consistent across the qwen2, llama, gemma2, gemma3, and (non-transformer) rwkv7 families. This is stronger than a within-transformer replication: the shared latent geometry is not a transformer-specific artifact but emerges across both attention-based and linear-attention-recurrent paradigms. The 8B scale test (Llama-3-8B-Instruct) is deferred until GPUs are free of the user's other concurrent jobs.
 
 **Open from Phase 1, addressable in Phase 1.5 if needed:**
 - The neutral contrast set is short factual sentences. This means the diff-of-means direction picks up "emotional vs factual prose" as a side channel, visible in early-layer AUROC=1.0 but not in mid-late PCA. Add a within-emotion contrast (e.g., emotion E vs the union of other emotions) and re-evaluate.
@@ -116,7 +125,7 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 | Phase | Status | Notes |
 |---|---|---|
 | 0 — Infra | **done** (2026-04-28) | ModelAdapter, extract, steer, stimuli, run_dir; 9/9 tests pass on Qwen2.5-0.5B |
-| 1 — Vectors | **v0 done** (2026-04-28) | Sofroniew geometry replicates on Qwen2.5-0.5B (PC1↔valence \|r\|=0.97 @ L10) and SmolLM2-360M (\|r\|=0.98 @ L24) |
+| 1 — Vectors | **v0 done** (2026-04-28) | Geometry replicates on 5 architectures (qwen2, llama, gemma2, gemma3, rwkv7); best \|PC1↔valence\| ranges 0.975–0.996 |
 | 2 — Adapter | not started | depends on Phase 1 |
 | 3 — Behavior | not started | parallelizable with Phase 1/2 |
 | 4 — Causal | not started | depends on Phase 1 |

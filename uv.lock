@@ -363,6 +363,7 @@ dependencies = [
     { name = "numpy" },
     { name = "pandas" },
     { name = "pyyaml" },
+    { name = "rwkv" },
     { name = "scikit-learn" },
     { name = "torch" },
     { name = "tqdm" },
@@ -383,6 +384,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", specifier = ">=2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "rwkv", specifier = ">=0.8.32" },
     { name = "scikit-learn", specifier = ">=1.5" },
     { name = "torch", specifier = ">=2.5" },
     { name = "tqdm", specifier = ">=4.66" },
@@ -1448,6 +1450,18 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/ea/f9/0ae446942c846b8266059ad8a30702a35afae55f5cdc54c5adf8d7afdc27/ruff-0.15.12-py3-none-win32.whl", hash = "sha256:d0185894e038d7043ba8fd6aee7499ece6462dc0ea9f1e260c7451807c714c20", size = 10657277, upload-time = "2026-04-24T18:17:18.591Z" },
     { url = "https://files.pythonhosted.org/packages/33/f1/9614e03e1cdcbf9437570b5400ced8a720b5db22b28d8e0f1bda429f660d/ruff-0.15.12-py3-none-win_amd64.whl", hash = "sha256:c87a162d61ab3adca47c03f7f717c68672edec7d1b5499e652331780fe74950d", size = 11837758, upload-time = "2026-04-24T18:17:00.113Z" },
     { url = "https://files.pythonhosted.org/packages/c0/98/6beb4b351e472e5f4c4613f7c35a5290b8be2497e183825310c4c3a3984b/ruff-0.15.12-py3-none-win_arm64.whl", hash = "sha256:a538f7a82d061cee7be55542aca1d86d1393d55d81d4fcc314370f4340930d4f", size = 11120821, upload-time = "2026-04-24T18:16:57.979Z" },
+]
+
+[[package]]
+name = "rwkv"
+version = "0.8.32"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "tokenizers" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/38/f0/18038fc78f380f0329aa1d3c5488462e743c9274fbc316e2aff86e9755aa/rwkv-0.8.32.tar.gz", hash = "sha256:a7941f38d40a55cfb4d38cee72c572ba65eb2f6314988d5c2568411aaced8031", size = 409926, upload-time = "2026-02-11T01:37:07.099Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5b/61/d7c764f01da87145342a8cdc3a86690e03cda4dfc2cf20377bdf5dc86b05/rwkv-0.8.32-py3-none-any.whl", hash = "sha256:d3f0594810a4a7e91569f177003ec22294c3eabc91c5f8d0ff3511702d4b67c1", size = 411388, upload-time = "2026-02-11T01:37:05.679Z" },
 ]
 
 [[package]]

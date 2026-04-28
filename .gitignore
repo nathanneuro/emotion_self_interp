@@ -19,3 +19,4 @@ outputs/
 # pytest
 .pytest_cache/
 .ruff_cache/
+.claude/scheduled_tasks.lock
