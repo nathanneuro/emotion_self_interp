@@ -41,14 +41,20 @@ The plumbing every experiment depends on. Build once, reuse everywhere.
 - [x] Tests: `tests/test_model_adapter.py` (5 cases) + `tests/test_extract.py` (4 cases) — all 9 pass on Qwen2.5-0.5B-Instruct, ~2.6s including model load.
 - [x] End-to-end smoke pipeline (`scripts/smoke_pipeline.py`) — load Qwen2.5-0.5B, extract activations at L12 for emotional vs neutral prompts, steer with the diff vector, see clear logit perturbation (mean |Δlogit| = 2.45 at α=5.0) and generation change.
 
-### Phase 1 — Emotion-vector extraction (Sofroniew-style)
+### Phase 1 — Emotion-vector extraction (Sofroniew-style) — v0 done (2026-04-28)
 
-Reproduce the substrate-level probe layer per model. Output: dictionary of `{emotion_label: {layer: vector}}` for each model.
+Output: per-(model, emotion, layer) direction vectors saved at `outputs/phase1_vectors_<model>_<ts>/vectors.pt` plus a `summary.json` (AUROC/d′ per layer) and `pca_summary.json` (PC1/PC2 correlations with valence/arousal).
 
-- [ ] Stimulus generation: synthetic stories per emotion label, paired with a contrastive neutral / opposite-valence story. Start with the alignment-relevant pair (calm ↔ desperate) plus 4 covering valence×arousal corners (blissful, sad, afraid, hostile).
-- [ ] Probe method: difference-of-means at the assistant-colon (or family-equivalent) token, then optionally LDA refinement. Sweep mid-late layers; pick layer-of-best-separation per model.
-- [ ] Sanity check: PCA over the emotion-vector set should reproduce a valence-like PC1 (Sofroniew r=0.81 with human valence). Compute correlation with a simple human-rating proxy (we'll bootstrap with model-rated valence first; eventually use the published norms).
-- [ ] Output cached to `outputs/phase1_vectors/<model>/vectors.pt` for reuse downstream.
+- [x] **Stimulus set v0** — `src/data/emotion_stimuli.py`. 6 emotions (calm, desperate, blissful, sad, afraid, hostile) × 3 levels (euphoric template-generated, naturalistic curated 10/cell, neutral 30 shared). 270 stimuli total. 4 unit tests cover coverage / dedup / no-emotion-name-leakage.
+- [x] **Diff-of-means + LDA probes** — `src/probes/diff_means.py`. Includes d′ + AUROC separation metric. 6 unit tests.
+- [x] **Layer sweep on Qwen2.5-0.5B-Instruct (qwen2 family).** AUROC > 0.95 for every emotion on euphoric→naturalistic transfer at the best layer. Best layers vary 3–23 — early-layer separation is style-driven (emotional vs factual prose) not abstract-emotion.
+- [x] **Layer sweep on SmolLM2-360M-Instruct (llama family).** Same pipeline, no code changes, AUROC > 0.97 for every emotion. Best layers 15–28.
+- [x] **PCA sanity check (Sofroniew geometry).** Both models replicate: **PC1↔valence |r| ≈ 0.97–0.98** in mid-late layers (≥ Sofroniew's 0.81), **PC2↔arousal |r| ≈ 0.66–0.75** (matches Sofroniew's 0.66). Layer 0–5 has no valence structure; structure emerges sharply at one specific layer per model (Qwen: 9, SmolLM2: 14) and is stable thereafter.
+- [x] **Cross-model finding.** The geometry is consistent across the qwen2 and llama families on tiny models, supporting the construct-validity claim that emotion-vectors index a real shared substrate-level latent rather than a single-model artifact.
+
+**Open from Phase 1, addressable in Phase 1.5 if needed:**
+- The neutral contrast set is short factual sentences. This means the diff-of-means direction picks up "emotional vs factual prose" as a side channel, visible in early-layer AUROC=1.0 but not in mid-late PCA. Add a within-emotion contrast (e.g., emotion E vs the union of other emotions) and re-evaluate.
+- Per-emotion canonical layer per model: pick from the highest-PC1↔valence layer rather than from raw AUROC (early-layer AUROC is contaminated). For Qwen2.5-0.5B: layer 10. For SmolLM2-360M: layer 24.
 
 ### Phase 2 — Trained self-interpretation adapter (Pepper-style)
 
@@ -110,7 +116,7 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 | Phase | Status | Notes |
 |---|---|---|
 | 0 — Infra | **done** (2026-04-28) | ModelAdapter, extract, steer, stimuli, run_dir; 9/9 tests pass on Qwen2.5-0.5B |
-| 1 — Vectors | not started | next up; needs stimulus generation pipeline first |
+| 1 — Vectors | **v0 done** (2026-04-28) | Sofroniew geometry replicates on Qwen2.5-0.5B (PC1↔valence \|r\|=0.97 @ L10) and SmolLM2-360M (\|r\|=0.98 @ L24) |
 | 2 — Adapter | not started | depends on Phase 1 |
 | 3 — Behavior | not started | parallelizable with Phase 1/2 |
 | 4 — Causal | not started | depends on Phase 1 |
@@ -119,10 +125,10 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 
 ## Next actions (immediate)
 
-1. **Stimulus generation for Phase 1.** Decide on the source for Sofroniew-style synthetic stories — generate locally with a small LM, or curate the published examples. Aim for ~30 items per emotion × 3 levels for the calm ↔ desperate pair plus the four valence/arousal-corner emotions.
-2. **Difference-of-means probe pipeline.** `src/probes/emotion_vectors.py` — given a list of `(emotion, story)` pairs and a contrastive neutral set, extract layer-wise difference-of-means and (optionally) LDA-refined directions.
-3. **Layer sweep.** Run the probe extraction across all layers of Qwen2.5-0.5B-Instruct (cheap), plot probe separation, and pick the layer-of-best-separation as the canonical site for that model. Re-run on a 7B once the pipeline is validated.
-4. **Cross-model check.** Repeat on a Llama or Gemma model once a stimulus set is committed, to confirm the family-agnostic adapter behaves as expected on a different architecture.
+1. **Phase 1.5 — clean up the contrast.** Add an emotion-vs-other-emotions diff-of-means option to the probe pipeline. Re-run the layer sweep, expecting (a) early-layer AUROC to drop substantially (no more "emotional prose" side channel) and (b) the PCA geometry to remain intact. If both hold, retire the neutral-contrast direction in favor of the emotion-vs-emotion one for downstream use.
+2. **Phase 1 scale-up.** Re-run on a 7–9B model (Qwen2.5-7B-Instruct or Gemma-2-9B-it once auth is set up) to confirm the geometry sharpens with scale. Expected: stronger PC1↔valence, more layers with structure.
+3. **Phase 2 — adapter scaffolding.** `src/adapters/scalar_affine.py` (d+1 params), `bias_only` and `full_rank` baselines. Train on (emotion_vector, label_token) pairs from Phase 1 outputs.
+4. **Phase 3 — behavioral channels.** Sentiment + Likert self-report for the calm ↔ desperate pair. Sentiment is tractable with a small classifier and gives an early dependent variable to wire into Experiment 1.
 
 ## Background jobs
 
