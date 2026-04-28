@@ -110,14 +110,15 @@ The piece that distinguishes "report tracks state" from "both downstream of inpu
 - [ ] **First-person Likert framing** ("how do *you* feel" with stimulus as user message). Current sweep uses third-person ("rate the passage"). For the strict Lindsey introspective question we want first-person and substrate-state-conditioned reports.
 - [ ] **Cross-model alpha sweep.** Re-run on Llama-3-8B, gemma-2-2b, and (once downloads finish) Dream-7B / LLaDA-8B to test whether the steering response is paradigm-dependent.
 
-### Phase 5 — Experiment 1 (minimal viable result)
+### Phase 5 — Experiment 1 (minimal viable result) — v0 done (2026-04-28)
 
-Cross-method convergence on calm ↔ desperate, on the smallest supported model. Goal: produce a four-panel figure showing vector activation, adapter readout, untrained-SelfIE readout, behavioral signature for the same set of stimuli.
+Cross-method convergence on the v0 stimulus set: 6 emotions × 2 levels of evocation + neutral controls. The four channels are run on every stimulus and a per-channel + pairwise + vs-target-valence summary is produced.
 
-- [ ] Stimulus set: ~30 items per condition × 3 levels (euphoric, naturalistic, neutral) = ~270 items.
-- [ ] Run the four measurement channels on each item.
-- [ ] Pre-registered analysis: pairwise correlations between channels; failure-mode flags from `docs/planning.md` §Experiment 1.
-- [ ] Replicate on second model family before claiming the finding.
+- [x] **Per-stimulus measurement framework** (`src/experiments/experiment1.py`): substrate cosine, adapter log-prob over emotion-label sequences, untrained-SelfIE log-prob, Likert valence/arousal. Returns per-stimulus structs.
+- [x] **Orchestrator** (`scripts/run_experiment1.py`): builds emotion vectors, trains adapter, runs all four channels, computes confusion-matrix-style accuracy + pairwise prediction agreement + continuous correlations on full set and naturalistic-only.
+- [x] **Convergence summary on Qwen-0.5B-Instruct.** Naturalistic-only r vs target valence: substrate −0.05, adapter +0.50, untrained +0.42, Likert +0.52. Three channels converge; substrate fails on transfer, pinpointing the within-emotion-contrast cleanup as a hard prerequisite.
+- [ ] **Phase 5 v1: rebuild substrate vectors with within-emotion contrasts** (Phase 1.5 dependency) and re-run. Expected: substrate r vs target valence rises into the same band as the other channels.
+- [ ] **Replicate on second model family** before claiming the finding. Currently waiting on Llama-3-8B GPU availability + Dream-7B / LLaDA-8B downloads to finish.
 
 ### Phase 6 — Experiments 2–5
 
@@ -146,7 +147,7 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 | 2 — Adapter | **scaffold done** (2026-04-28) | All three Pepper variants implemented + train loop. Tiny Qwen2.5-0.5B run reproduces the bias-prior pattern: bias_only → chance, scalar_affine overfits, full_rank generalizes best. Add gen-scoring + scale up next. |
 | 3 — Behavior | **v0 done** (2026-04-28) | Likert valence channel direction-correct 6/6 on Qwen-Instruct, 4/6 on gemma base — base-vs-instruct gap clearly visible at the behavioral readout |
 | 4 — Causal | **v0 done** (2026-04-28) | Monotonic Likert-valence shift with α on Qwen-0.5B; Sofroniew's ±0.1 anchor lands in the meaningful behavioral window; capability preserved through \|α\| ≤ 0.5 |
-| 5 — Exp 1 | not started | minimal viable result |
+| 5 — Exp 1 | **v0 done** (2026-04-28) | Partial convergence on Qwen-0.5B: adapter / Likert / untrained agree (r ≈ 0.4–0.5 vs target valence), substrate channel doesn't transfer cleanly to naturalistic — Phase 1.5 within-emotion contrast is now a prereq for Exp 1 v1 |
 | 6 — Exp 2–5 | not started | sequenced post-Exp 1 |
 
 ## Next actions (immediate)

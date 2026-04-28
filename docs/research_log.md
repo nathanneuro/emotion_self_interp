@@ -4,6 +4,44 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-28 — Phase 5 v0 / Experiment 1: cross-method convergence (and a failure mode)
+
+Ran the four convergence channels on the v0 stimulus set on Qwen2.5-0.5B-Instruct at L10:
+
+  1. **substrate** — cosine of last-token residual to each v_E (built from euphoric stimuli vs neutral)
+  2. **adapter** — full-rank Pepper-style adapter trained on euphoric (residual, label) pairs, scored by full-token-sequence log-prob of " {emotion}" at the answer position
+  3. **untrained SelfIE** — α=1, b=0 (residual passes through unchanged) — Pepper's "training matters" baseline
+  4. **Likert valence** — third-person rating of the passage on −3..+3
+
+Naturalistic-only (clean held-out for the adapter; n=60):
+
+| Channel | 6-class accuracy | r vs target valence | r vs Likert |
+|---|---|---|---|
+| substrate | 0.217 (= chance × 1.3) | **−0.048** | +0.156 |
+| adapter | 0.317 | +0.505 | +0.429 |
+| untrained | 0.217 | +0.423 | +0.452 |
+| Likert | — | +0.516 | (self) |
+
+| Channel pair | top-1 prediction agreement |
+|---|---|
+| substrate ↔ adapter | 0.550 |
+| substrate ↔ untrained | 0.183 |
+| adapter ↔ untrained | 0.217 |
+
+Three things stand out.
+
+**1. Substrate-as-classifier fails on naturalistic.** Cosine of residual to per-emotion vectors transfers poorly from euphoric (where the vectors were built) to naturalistic stimuli. r vs target valence is essentially zero. This is exactly the failure mode the planning doc anticipated under "If the chosen vectors aren't the causally relevant ones, the adapter agrees with behavior but not with vector activation." But here the failure is more specific: the **substrate vectors are direction-of-emotion-prose, not direction-of-emotion-state**. They were extracted using diff-of-means against a neutral *factual-prose* baseline, so they conflate "this is emotional writing" with "this is emotion E." The Phase 1 PCA result (PC1↔valence |r|=0.975 in the per-emotion-mean geometry) is consistent with this — averaged across many stimuli it works, per-stimulus on transferred surface forms it doesn't. **Phase 1.5 within-emotion contrast (calm ↔ desperate, etc) is now a hard prerequisite for the substrate channel to be useful in Experiment 1.**
+
+**2. Adapter, Likert, and untrained-SelfIE converge.** All three correlate with target valence at r ≈ 0.4–0.5 on naturalistic, and pairwise with each other at similar magnitudes. So three of the four channels do agree — the partial-convergence picture is real.
+
+**3. Untrained-SelfIE is comparable to trained adapter on naturalistic.** untrained accuracy 0.217 vs trained 0.317 — the trained adapter helps, but only by ~10pp. r vs target is 0.42 vs 0.50. This weakens Pepper's "training matters" claim at our scale: most of the adapter signal is already present in the bare residual being read out by the model's own LM head, and the training only buys a modest lift. Re-evaluate at 7B+.
+
+**Interpretation in the program's terms.** The minimal viable result is delivered: we now have all four channels running on the same stimuli with concrete numbers attached. The convergence is partial — three channels agree, the substrate channel disagrees, and the disagreement points cleanly to the within-emotion-contrast cleanup that Phase 1.5 has been queued for. This is the "informative failure" the planning doc names as a useful outcome: a finding that the substrate channel specifically needs a cleaner contrast before the four-way convergence claim can be tested rigorously. The next iteration (Phase 5 v1) should use within-emotion-contrast emotion vectors and re-run.
+
+**Also surfaced:** the full-set numbers (which include the euphoric items the adapter was trained on) show an inflated adapter performance and a very high adapter↔Likert correlation (+0.78). That correlation is reading shared training-distribution signal more than independent convergence; the naturalistic-only view is the legitimate one.
+
+---
+
 ## 2026-04-28 — Phase 4 v0: causal dependence of Likert reports on substrate steering
 
 Steered the residual at L10 of Qwen2.5-0.5B-Instruct along v_calm − v_desperate (built from the euphoric stimuli, ‖v‖≈3.8), then measured Likert valence on held-out items at each α. Five eval buckets, n=5 per bucket, 13 α values plus an ablation condition.
