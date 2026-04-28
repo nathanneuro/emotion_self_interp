@@ -122,7 +122,12 @@ Cross-method convergence on the v0 stimulus set: 6 emotions × 2 levels of evoca
 
 ### Phase 6 — Experiments 2–5
 
-Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-prior decomposition, mostly reuses Phase 2 code) → 3 (causal dependence, Phase 4 stack) → 4 (induced vs. reported divergence) → 5 (post-training comparison; needs base + post-trained pairs, e.g., Llama-3.1-8B vs. Llama-3.1-8B-Instruct, Qwen2.5-7B-Base vs. -Instruct).
+Status:
+
+- [x] **Experiment 2** — bias-prior decomposition (`scripts/run_experiment2.py`, `src/experiments/experiment2.py`). Adds `ScaleOnlyAdapter` (h ↦ α·h, 1 param) to round out the variants. Adds zero-vector decoding + input-shuffle test. On Qwen-0.5B-Instruct, `bias_only` sits exactly at chance and `full_rank` is fully input-conditional (shuffle returns to chance). Pepper's "bias carries 85%" caveat does *not* hold at our scale; the trained adapter is genuinely activation-conditional.
+- [x] **Experiment 3** — done as Phase 4 v0 (Lindsey-style α-sweep on Likert; monotonic causal dependence; Sofroniew's ±0.1 anchor verified at 0.5B).
+- [ ] **Experiment 4** — veridical introspection. Construct trials where the trained adapter's report and the substrate diverge (mislabeled-training and/or adversarial-steering routes). Measure whether downstream behavior tracks the substrate or the report. The biggest novel design left.
+- [x] **Experiment 5** — Qwen2.5-0.5B base vs instruct, Exp 1 v1 pipeline. Substrate r vs target valence is *higher* in base (+0.572 vs +0.509); Likert r vs target jumps in instruct (+0.382 → +0.516); substrate↔Likert r climbs +0.06. Post-training reshapes the readout, not the substrate.
 
 ## Open decisions (defer until forced)
 
@@ -149,7 +154,10 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 | 4 — Causal | **v0 done** (2026-04-28) | Monotonic Likert-valence shift with α on Qwen-0.5B; Sofroniew's ±0.1 anchor lands in the meaningful behavioral window; capability preserved through \|α\| ≤ 0.5 |
 | 1.5 — Within-emotion contrast | **done** (2026-04-28) | substrate r vs target valence on Qwen-0.5B: −0.05 → +0.51. Three benefits: clean per-stimulus prediction, tighter PCA, no early-layer style artifact |
 | 5 — Exp 1 | **v1 done** (2026-04-28) | Clean 4-way convergence on Qwen-0.5B-Instruct (r=0.42–0.52 across all channels). On gemma-2-2b base substrate+adapter rise to 0.74–0.76 but Likert collapses to 0.15 — base-vs-instruct gap triangulated with Phase 3 |
-| 6 — Exp 2–5 | not started | sequenced post-Exp 1 |
+| 6 — Exp 2 | **done** (2026-04-28) | bias_only @ chance, full_rank fully input-conditional under shuffle. Pepper's bias-prior caveat is *weaker* than headline at 0.5B — adapter is not just a format prior |
+| 6 — Exp 3 | done as Phase 4 v0 | monotonic α→Likert, ±0.1 anchor verified |
+| 6 — Exp 4 | not started | veridical introspection — biggest novel design |
+| 6 — Exp 5 | **done** (2026-04-28) | Qwen-0.5B base vs instruct: substrate same/stronger in base; Likert + substrate↔Likert link strengthens with instruct. Post-training reshapes the readout, not the substrate |
 
 ## Next actions (immediate)
 

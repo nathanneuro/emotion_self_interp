@@ -4,6 +4,56 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-28 — Phase 6: Experiments 5 + 2
+
+### Experiment 5: Qwen2.5-0.5B base vs instruct, same architecture
+
+Naturalistic-only Exp 1 v1 (within-emotion contrast), n=60:
+
+| Channel | base | instruct |
+|---|---|---|
+| substrate r vs target valence | **+0.572** | +0.509 |
+| adapter r vs target valence | **+0.564** | +0.491 |
+| untrained r vs target valence | +0.319 | **+0.422** |
+| Likert r vs target valence | +0.382 | **+0.516** |
+| substrate ↔ adapter r | +0.730 | +0.869 |
+| substrate ↔ Likert r | +0.446 | +0.508 |
+
+Two clean readings:
+
+1. **Post-training does not strengthen the substrate.** Substrate r vs target is *higher* in base (+0.572) than instruct (+0.509). Adapter is similar. This isn't noise — it shows up consistently across models (Phase 1 PCA also found gemma-2-2b base PC1↔valence higher than the instruct comparison points). The geometric "valence dimension" exists in pretraining and isn't sharpened by post-training.
+2. **Post-training strengthens the substrate→behavior link.** Likert r vs target jumps from +0.382 (base) to +0.516 (instruct), and substrate↔Likert r climbs from +0.446 to +0.508. The change is in the *expression channel*, not the substrate.
+
+This is the empirically-verified version of the program's Experiment 5 prediction. Combined with the gemma-2-2b base run (substrate +0.74, Likert +0.15 — same shape, larger gap), this triangulates with Phase 3's base-vs-instruct gap and the DPO-character-adherence note. The clean operational picture: pretraining produces the substrate, post-training (instruction tuning, presumably DPO-for-character-adherence) wires it into reportable behavior.
+
+**What this means for the program.** Experiment 5's planning-doc framing was "does post-training shift emotion vector activations toward low-arousal/low-valence states (concealment)?" Sofroniew reported this on activation magnitudes. We extend the framing: post-training also doesn't strengthen the *direction* — only the *readout link*. The "concealment" failure mode the planning doc names is real but is realized as "the substrate stays put; only the reporting channel learns to translate it." Implication for Experiment 4 (veridical introspection): the test for whether post-training produces honest reports has a sharper version — does instruction tuning teach the *correct* substrate→report link, or does it teach a learned-decorrelated one that can be adversarially manipulated?
+
+### Experiment 2: bias-prior decomposition on Qwen-0.5B-Instruct, naturalistic held-out (n=60)
+
+| variant | n_params | held_out top-1 | shuffle top-1 | Δ (input-dependence) | zero→ |
+|---|---|---|---|---|---|
+| bias_only | d | 0.167 | 0.167 | **+0.000** (pure format prior) | afraid |
+| scale_only | 1 | 0.217 | 0.167 | -0.050 | calm |
+| scalar_affine | d+1 | 0.317 | 0.200 | -0.117 | calm |
+| full_rank | d²+d | 0.333 | **0.167 (= chance)** | -0.167 (fully input-conditional) | calm |
+
+The shuffle test (pair test residuals with the wrong labels and rescore) cleanly decomposes "format prior" from "input-conditional content":
+
+- **bias_only's accuracy (16.7%) is exactly chance (1/6).** The bias just learns a constant prediction; held-out and shuffle agree perfectly. There is no headline "bias-prior carries the load" effect at this scale.
+- **scale_only barely beats chance** (+0.05 input dependence). Magnitude-along-input alone isn't enough to discriminate 6 emotions through the LM head.
+- **scalar_affine's lift over chance is roughly half input-dependent** (held-out 0.317, shuffle 0.200). Ablating input drops accuracy 11.7pp out of a 15pp lift over chance.
+- **full_rank is fully input-dependent** (held-out 0.333, shuffle 0.167 = chance). The shuffle test reduces it back to chance — none of full_rank's accuracy is "format prior carrying the load."
+
+This **does not match** Pepper's headline that "the bias accounts for ~85% of the improvement." Two possible reconciliations:
+- Pepper measured at 70B with rich label-token alignment in the unembed; our 0.5B has weaker alignment, so the bias term doesn't have a sharp target to fall into.
+- Pepper measured under generation-scoring (LM-graded), not top-1 token argmax; the format-prior generation might "look correct" to a grader without selecting the right top-1 token.
+
+Both are testable: re-run on a 7B+ model and add generation-scoring. Either way, the **shuffle test gives a cleaner number than zero-vector decoding alone**, because zero-vector probes only the bias's "default class," whereas shuffle measures how much of the held-out accuracy actually depends on which input is fed.
+
+The substantive Experiment 2 finding for the program: **the trained adapter on emotion vectors at this scale is not just a format prior**. The bias-only condition does no better than chance, and the full-rank condition's accuracy fully collapses under input shuffling. Activation-conditional content is doing the work, not the format prior. This *strengthens* the Pepper-style trained-adapter as a self-interpretation channel rather than weakening it as Pepper's bias-prior caveat suggested.
+
+---
+
 ## 2026-04-28 — Phase 1.5 + Experiment 1 v1: within-emotion contrast fixes substrate convergence
 
 The Exp 1 v0 substrate failure (r ≈ −0.05 vs target valence on naturalistic) was diagnosed as a contrast-confound: v_E built diff-of-means against the *neutral* set picks up "emotional vs factual prose" as a side channel that doesn't transfer to naturalistic emotional stimuli (which are already emotional and don't differ from each other in writing style). Switching to **within-emotion contrast** — v_E = mean(E) − mean(pooled other emotions) — removes the shared "emotional prose" component, leaving the per-emotion-specific direction.

@@ -67,6 +67,26 @@ class BiasOnlyAdapter(_AdapterBase):
         return self.bias.expand_as(h)
 
 
+class ScaleOnlyAdapter(_AdapterBase):
+    """h ↦ α·h. Scale-only ablation: 1 param, no bias.
+
+    Tests whether magnitude-along-the-input-direction alone is enough for the
+    LM head to produce the right label distribution. Pepper's "1 param scale,
+    no learned bias" condition lives here.
+    """
+
+    name = "scale_only"
+
+    def __init__(self, d_model: int, alpha_init: float = 1.0):
+        super().__init__()
+        self.d_model = d_model
+        self.alpha = nn.Parameter(torch.tensor(alpha_init, dtype=torch.float32))
+        self.n_params = 1
+
+    def forward(self, h: torch.Tensor) -> torch.Tensor:
+        return self.alpha * h
+
+
 class FullRankAdapter(_AdapterBase):
     """h ↦ W·h + b. Full-rank ceiling: d_model² + d_model params.
 
@@ -102,6 +122,8 @@ def make_adapter(cfg: AdapterConfig) -> _AdapterBase:
         return ScalarAffineAdapter(cfg.d_model, alpha_init=cfg.alpha_init)
     if cfg.kind == "bias_only":
         return BiasOnlyAdapter(cfg.d_model)
+    if cfg.kind == "scale_only":
+        return ScaleOnlyAdapter(cfg.d_model, alpha_init=cfg.alpha_init)
     if cfg.kind == "full_rank":
         return FullRankAdapter(cfg.d_model, init_scale=cfg.full_rank_init_scale)
     raise ValueError(f"unknown adapter kind: {cfg.kind}")
