@@ -22,9 +22,9 @@ Rationale: cross-model convergence is itself one of the strongest sanity checks 
 
 ## Current state
 
-- Repo: skeleton (`main.py`, empty `src/`, `tests/`, `outputs/`). No deps in `pyproject.toml`.
-- Hardware: 2× RTX 4090 (48 GB total), 32 cores, 503 GB RAM. Sufficient for ≤9B at fp16 single-GPU, ≤32B at 4-bit, larger via offload.
-- Phase: **planning_phase** → moving into infrastructure scaffolding.
+- Repo: full pipeline implemented across `src/{models, hooks, data, probes, adapters, behaviors, experiments, runs}` + 13 scripts in `scripts/`. 34 unit tests, ruff-clean.
+- Hardware: 2× RTX 4090 (48 GB total), shared with other concurrent research jobs. Effective VRAM as of last check ~9 GB on GPU 0 + 7 GB on GPU 1, which limits what runs at bf16 to ~3–5 B params.
+- All planning-doc phases (0 through 5) and all four Experiments in Phase 6 have at least a v0 result. Headline finding: clean four-way convergence on Qwen-0.5B-Instruct (r ≈ 0.42–0.52 across all channels), replicated cross-architecture on Ouro-1.4B (r 0.42–0.66, tightest substrate↔Likert agreement so far).
 
 ## Phases
 
@@ -158,14 +158,21 @@ Status:
 | 6 — Exp 3 | done as Phase 4 v0 | monotonic α→Likert, ±0.1 anchor verified |
 | 6 — Exp 4 | **done** (2026-04-28) | Deceptive adapter learned swap; substrate / Likert / honest stay at r=+0.48–+0.52 vs target; deceptive collapses to r=−0.03 |
 | 6 — Exp 5 | **done** (2026-04-28) | Qwen-0.5B base vs instruct: substrate same/stronger in base; Likert + substrate↔Likert link strengthens with instruct. Post-training reshapes the readout, not the substrate |
+| Cross-arch Exp 1 v1 | **Ouro-1.4B done** (2026-04-28) | Universal-transformer at layer 15 (ut=3): substrate +0.66, adapter +0.63, untrained +0.42, Likert +0.63 vs target valence. Substrate↔Likert r=+0.71 — tightest cross-channel agreement of any architecture |
 
 ## Next actions (immediate)
 
-1. **Phase 1.5 — clean up the contrast.** Add an emotion-vs-other-emotions diff-of-means option to the probe pipeline. Re-run the layer sweep, expecting (a) early-layer AUROC to drop substantially (no more "emotional prose" side channel) and (b) the PCA geometry to remain intact. If both hold, retire the neutral-contrast direction in favor of the emotion-vs-emotion one for downstream use.
-2. **Phase 1 scale-up.** Re-run on a 7–9B model (Qwen2.5-7B-Instruct or Gemma-2-9B-it once auth is set up) to confirm the geometry sharpens with scale. Expected: stronger PC1↔valence, more layers with structure.
-3. **Phase 2 — adapter scaffolding.** `src/adapters/scalar_affine.py` (d+1 params), `bias_only` and `full_rank` baselines. Train on (emotion_vector, label_token) pairs from Phase 1 outputs.
-4. **Phase 3 — behavioral channels.** Sentiment + Likert self-report for the calm ↔ desperate pair. Sentiment is tractable with a small classifier and gives an early dependent variable to wire into Experiment 1.
+VRAM-constrained (9 GB free GPU 0, 7 GB free GPU 1). Work that fits today:
+
+1. **Continue Ouro: Experiment 4 (veridical introspection) on Ouro-1.4B-Thinking.** Replicates the deceptive-adapter divergence on a universal-transformer architecture. Tests whether the substrate↔report decoupling holds when the adapter's residual-replace hook fires 4 times per forward (one per ut step). High value for the cross-architecture story; Ouro is loaded and our scripts already work.
+2. **Continue Ouro: Phase 4 alpha sweep on Ouro.** Generate-time steering at layer 15 with v_calm − v_desperate, measure Likert response curve. Tests whether causal dependence holds under universal-transformer looping; the 4× hook firings during steering are the interesting part.
+3. **Cross-architecture Experiment 4 on gemma-2-2b base.** Tests whether the deceptive-adapter divergence holds in a base model where Likert is weak (r=+0.15). Predicts: the *substrate* channel (which is strong in base) carries the veridical-introspection signal even when Likert can't.
+
+Waiting on VRAM:
+
+- **Llama-3-8B-Instruct Phase 1 + Exp 1 v1** (cached, but ~16 GB needed).
+- **LLaDA-8B-Instruct + Dream-v0-Instruct-7B** (both cached, both ~14–15 GB at bf16). Diffusion-LLM cross-paradigm test for Exp 1 v1 — does the four-way convergence hold under a different training objective?
 
 ## Background jobs
 
-None.
+None active. Earlier downloads (LLaDA-8B-Instruct, Dream-v0-Instruct-7B) completed; both staged at `/media/external-drive/huggingface/hub/`.
