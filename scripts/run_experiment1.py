@@ -68,12 +68,17 @@ def main() -> None:
                     choices=["neutral", "other_emotions"],
                     help="Substrate-vector contrast. v0 used 'neutral' (vs factual prose); "
                          "v1 / Phase 1.5 default is 'other_emotions' (within-emotion).")
+    ap.add_argument("--trust-remote-code", action="store_true",
+                    help="Required for custom-modeling repos (e.g. Ouro).")
     args = ap.parse_args()
 
     print(f"Loading {args.model} ...")
     device_map = "cuda:0" if torch.cuda.is_available() else "cpu"
     dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-    model = ModelAdapter.load(args.model, dtype=dtype, device_map=device_map)
+    model = ModelAdapter.load(
+        args.model, dtype=dtype, device_map=device_map,
+        trust_remote_code=args.trust_remote_code,
+    )
     print(f"  family={model.family} n_layers={model.n_layers} d_model={model.d_model}")
     print(f"  canonical layer: {args.layer}")
 

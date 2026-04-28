@@ -4,6 +4,39 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-28 — Cross-architecture Exp 1 v1 on Ouro-1.4B-Thinking
+
+VRAM-constrained: GPU 0 had 9.6 GB free, 7.6 GB on GPU 1, ruling out 7B+ at bf16. Picked Ouro-1.4B (universal-transformer) — most architecturally distinctive model that fits, and we had Phase 1's per-(layer, ut_step) finding that valence structure builds up across loop iterations.
+
+Naturalistic-only Exp 1 v1 (within-emotion contrast, layer 15 — Phase 1's best PC1↔valence site at ut=3), n=60:
+
+| Channel | Ouro-1.4B-Thinking | Qwen-0.5B-Instruct | gemma-2-2b base |
+|---|---|---|---|
+| substrate r vs target | +0.656 | +0.509 | +0.735 |
+| adapter r vs target | +0.628 | +0.491 | +0.760 |
+| untrained r vs target | +0.423 | +0.422 | +0.445 |
+| Likert r vs target | **+0.626** | +0.516 | +0.148 |
+| substrate ↔ Likert r | **+0.714** | +0.508 | low |
+| substrate ↔ adapter r | +0.872 | +0.869 | +0.830 |
+| 6-class substrate accuracy | **0.450** | 0.233 | 0.417 |
+
+**Two non-obvious findings:**
+
+1. **Substrate↔Likert convergence (+0.714) is the highest cross-channel agreement so far.** The two channels read the same residual through different machinery (cosine vs LM-head logits), and Ouro's universal-transformer-style looping produces tighter alignment between them than any prior model. Plausible mechanism: 4 ut-step iterations of the same 24 layers force the residual representation to "settle" into a state that is both substrate-readable and behavior-readable in the same direction. Worth thinking about whether this is general to repeated/recurrent computation.
+
+2. **The adapter training framework survives 4× layer-call hooks.** Our `_residual_replace_hook` fires once per layer call. With Ouro's looping, that's 4 hits per forward — each overwriting the prior injection. Naive expectation: the model only "sees" the residual at ut=3, so training signal is weak. Empirical: adapter still learns at r=+0.63 vs target. The injected concept gets re-processed through 4 iterations of the model's stack, which evidently sharpens rather than washes out the signal.
+
+**Implementation note:** had to add `use_cache=False` to `extract_batch`'s forward call. Ouro's `UniversalTransformerCache.get_mask_sizes` expects `cache_position` as a tensor but the transformers 5.x masking pipeline passes int — same issue we already worked around for the `extract_emotion_vectors_ouro.py` script in Phase 1. Fix is centralized now in `src/hooks/extract.py`.
+
+The four-way convergence claim is now confirmed cross-architecture on three model paradigms in different ways:
+- standard transformer instruct (Qwen-0.5B) → all four ~0.42–0.52 vs target
+- standard transformer base (gemma-2-2b) → substrate + adapter strong, Likert weak (base-vs-instruct gap)
+- universal-transformer instruct (Ouro-1.4B) → all four 0.42–0.66 vs target, tightest substrate↔Likert agreement
+
+Diffusion LLMs (LLaDA-8B, Dream-7B) need to wait for VRAM. Currently ~9.6 GB free on GPU 0; LLaDA at bf16 needs ~16 GB. Could go via int4 quantization or wait for the consciousness_bench / brain_graph processes to finish.
+
+---
+
 ## 2026-04-28 — Phase 6 / Experiment 4: veridical introspection holds
 
 Trained two adapters on the same residual cache: an `honest` adapter on `(h_E, "E")` and a `deceptive` adapter on `(h_E, swap("E"))` with `swap = {calm↔desperate, blissful↔sad, afraid↔hostile}`. Then on naturalistic held-out (n=60), measured every channel's match against (a) the true emotion and (b) the deceptive adapter's swap target.

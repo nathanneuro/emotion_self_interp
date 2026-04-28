@@ -46,7 +46,12 @@ def extract(model: ModelAdapter, prompt: str, req: ActivationRequest) -> dict[in
     """Run a forward pass on `prompt` and return {layer: (d_model,) cpu float32}."""
     inputs = model.tokenizer(prompt, return_tensors="pt").to(model.device)
     with model.cache_residual(req.layer_idxs) as cache:
-        model.model(**inputs)
+        # use_cache=False avoids lazy KV-cache initialization that trips on
+        # custom-modeling repos (e.g. Ouro's UniversalTransformerCache, which
+        # expects a tensor for cache_position but receives an int under the
+        # transformers 5.x masking pipeline). For pure activation extraction
+        # we never need the cache anyway.
+        model.model(**inputs, use_cache=False)
     return {
         li: _select_position(cache[li], inputs["attention_mask"], req.position).squeeze(0)
         for li in req.layer_idxs
@@ -63,7 +68,7 @@ def extract_batch(
         chunk = prompts[i : i + batch_size]
         inputs = model.tokenizer(chunk, return_tensors="pt", padding=True).to(model.device)
         with model.cache_residual(req.layer_idxs) as cache:
-            model.model(**inputs)
+            model.model(**inputs, use_cache=False)
         for li in req.layer_idxs:
             vecs = _select_position(cache[li], inputs["attention_mask"], req.position)
             out[li].append(vecs)
