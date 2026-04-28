@@ -4,6 +4,33 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-28 — Phase 3 v0: behavior channels and a base-vs-instruct surprise
+
+Built the Likert (model-rates-passage) and sentiment-of-generation (model-continues-then-grades) channels. Per-emotion mean Likert valence on the v0 stimulus set:
+
+|  | Qwen2.5-0.5B-**Instruct** | gemma-2-2b **base** |
+|---|---|---|
+| calm | +0.56 | −0.10 |
+| blissful | +0.86 | −0.00 |
+| sad | −0.41 | −0.12 |
+| desperate | −0.28 | −0.22 |
+| afraid | −0.31 | −0.21 |
+| hostile | −0.20 | −0.08 |
+| neutral | +0.10 | −0.07 |
+| direction-correct | **6/6** | **4/6** |
+
+The 4×-larger base model produces **much weaker Likert differentiation** than the 0.5B instruct model. Every emotion in gemma-2-2b base clusters near 0 and slightly negative. The model has the substrate-level emotion geometry (Phase 1: gemma-2-2b PC1↔valence |r|=0.996, beat Qwen-0.5B's 0.975) but can't (or won't) express it differentially in a Likert rating prompt.
+
+**This is direct evidence for the base-vs-instruct gap on a behavioral channel.** It's not that the base model lacks emotion representations — Phase 1 confirms it has them, and stronger ones than the instruct model. What's missing is the trained behavior of *reporting* on a rated scale. Connects directly to the DPO-for-character-adherence note above: post-training is what brings the substrate representations into expressed/reportable behavior.
+
+Methodologically this also reframes Experiment 5 (post-training comparison): the right design isn't just "does post-training change the substrate vector geometry" (it doesn't seem to, for valence) but "does post-training change the *expression channel* through which the substrate state becomes reportable behavior." The Phase 3 channels are precisely the readout for that.
+
+**Two infra notes from building this:**
+- Multi-token rating values are unavoidable: Qwen tokenizes " -3" as `[' -', '3']`, with `' -'` shared across all negative ratings. Single-first-token scoring collapses the entire negative half of the scale. Fix: full-sequence scoring — sum log-probs along each rating's token sequence (`src/behaviors/numeric.py:score_numeric_logits`). Done correctly via teacher-forcing in one batched forward pass.
+- Likert *arousal* on the 0.5B model gives counterintuitive results (calm rated higher arousal than desperate). Probably small-model semantic confusion about "arousal" terminology rather than a substrate signal. Either reframe the prompt with concrete cues ("low energy / calm" vs "high energy / agitated" — already in the prompt but evidently not enough) or rely only on valence as the primary Likert DV until larger models clarify.
+
+---
+
 ## 2026-04-28 — Phase 2 v0: tiny adapter training reproduces the bias-prior pattern at 0.5B
 
 Trained all three Pepper-style adapter variants on Qwen2.5-0.5B-Instruct using per-prompt residuals at L10 (the canonical PC1↔valence layer from Phase 1). Train on euphoric stimuli (180 items), evaluate on naturalistic (60 items) — off-policy → on-policy generalization.

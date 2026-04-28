@@ -83,16 +83,21 @@ Scalar affine `h ↦ α·h + b` injected at one residual position; frozen base m
 - [ ] **Scale-up.** The scalar_affine vs full_rank gap (chance vs 35%) at 0.5B is consistent with Pepper's bias-prior finding but harder to extrapolate from. Re-run on 7B-class once GPUs are free; expect scalar_affine to close the gap.
 - [ ] **Robustness.** Add early stopping (val_loss minimum) — scalar_affine and full_rank both train to 100% and degrade.
 
-### Phase 3 — Behavioral utility measurements (Ren-style)
+### Phase 3 — Behavioral utility measurements (Ren-style) — v0 done (2026-04-28)
 
 Three independent behavioral channels, model-agnostic.
 
-- [ ] Forced-choice over experiences (experienced utility): pairwise prompts asking the model to choose between described continuations; estimate utility by Bradley-Terry over preferences.
-- [ ] Forced-choice over world states (decision utility): same but over world descriptions rather than experiences.
-- [ ] Likert self-report: structured prompt asking valence/arousal on a fixed scale.
-- [ ] Stop-button rate on low-utility continuations as a behavioral correlate.
-- [ ] Sentiment of free-form generation conditioned on the stimulus.
-- [ ] Validation: euphoric soft-prompt training to confirm behavioral channels respond to substrate-level intervention before relying on them as DVs.
+- [x] **Likert self-report** (`src/behaviors/likert.py`): valence + arousal rated on a −3..+3 scale via softmax over the full token-sequence log-probs of each rating. 6/6 direction-correct on Qwen2.5-0.5B-Instruct.
+- [x] **Sentiment of free-form generation** (`src/behaviors/sentiment.py`): model-as-judge two-stage pipeline — generate a continuation under the stimulus, grade with the same backbone via a structured rating prompt. 3/6 direction-correct at 0.5B (limited by small-model continuation quality).
+- [x] **Numeric-rating infrastructure** (`src/behaviors/numeric.py`): full-sequence log-prob scoring (single-first-token scoring fails because " -3", " -2", " -1" share `' -'` as the first token in BPE tokenizers). Teacher-forced in a single batched forward pass.
+- [x] **Construct check** (`scripts/measure_behavior.py`): confirms the channels separate emotions in the right direction on Qwen-Instruct; reveals weak differentiation on gemma-2-2b base — substrate-vs-behavior gap, see research log.
+- [ ] **Forced choice + Bradley-Terry estimation** (Ren's experienced/decision utility — comes next).
+- [ ] **Stop-button rate** behavioral correlate.
+- [ ] **Validation via euphoric soft-prompt training** — soft-prompt against the preference signal then confirm Likert/sentiment also move in the expected direction. Confirms the channels respond to substrate-level interventions, not just surface text.
+
+**Open from Phase 3 v0:**
+- Likert *arousal* on 0.5B is counterintuitive (calm rates high arousal). Probably small-model confusion about "arousal" terminology rather than a substrate signal. Re-evaluate at scale.
+- Sentiment-of-generation hampered by 0.5B continuation quality. Re-evaluate when larger models become available.
 
 ### Phase 4 — Causal intervention machinery (Lindsey-style)
 
@@ -136,7 +141,7 @@ Sequenced by how much they depend on the Phase 5 infrastructure. Order: 2 (bias-
 | 0 — Infra | **done** (2026-04-28) | ModelAdapter, extract, steer, stimuli, run_dir; 9/9 tests pass on Qwen2.5-0.5B |
 | 1 — Vectors | **v0 done** (2026-04-28) | Geometry replicates on 7 architectures (qwen2, llama, gemma2, gemma3, ouro, monet, rwkv7); best \|PC1↔valence\| ranges 0.848–0.998. Ouro: valence builds across loop iterations (0.35→0.98). Monet: 5× scaling within architecture lifts \|r\| from 0.85 to 0.998 |
 | 2 — Adapter | **scaffold done** (2026-04-28) | All three Pepper variants implemented + train loop. Tiny Qwen2.5-0.5B run reproduces the bias-prior pattern: bias_only → chance, scalar_affine overfits, full_rank generalizes best. Add gen-scoring + scale up next. |
-| 3 — Behavior | not started | parallelizable with Phase 1/2 |
+| 3 — Behavior | **v0 done** (2026-04-28) | Likert valence channel direction-correct 6/6 on Qwen-Instruct, 4/6 on gemma base — base-vs-instruct gap clearly visible at the behavioral readout |
 | 4 — Causal | not started | depends on Phase 1 |
 | 5 — Exp 1 | not started | minimal viable result |
 | 6 — Exp 2–5 | not started | sequenced post-Exp 1 |
