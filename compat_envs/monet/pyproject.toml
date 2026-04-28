@@ -1,0 +1,26 @@
+[project]
+name = "emotion-self-interp-monet-compat"
+version = "0.1.0"
+description = "Pinned transformers-4.42 env for legacy custom-modeling repos (Monet, etc.)"
+readme = "README.md"
+# Python 3.11/3.12 only — transformers 4.42 wasn't built against 3.13's
+# breaking C-API changes, and several deps in that era cap out at 3.12.
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    # Pinned to the exact range Monet was packaged against (config says
+    # transformers_version: 4.42.3). Keeping the band tight here avoids
+    # re-discovering the same compat problems each upgrade.
+    "transformers>=4.42,<4.46",
+    "torch>=2.3,<2.6",
+    "accelerate>=0.30,<1.0",
+    "sentencepiece>=0.2",
+    "protobuf>=4,<6",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "scikit-learn>=1.4",
+    "tqdm>=4.66",
+    "matplotlib>=3.9",
+]
+
+[tool.uv]
+package = false
