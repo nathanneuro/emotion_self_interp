@@ -33,14 +33,18 @@ from src.models.adapter import ModelAdapter
 
 
 # Probe prompt: places the activation under a "what is this concept" frame.
-# `{ACT}` is a single placeholder token whose residual gets replaced by the
-# adapter output at the target layer.
+# `{ACT}` is replaced by a single existing token (chosen at tokenize time to
+# be a guaranteed-single-piece word) whose residual gets overwritten by the
+# adapter output. We avoid adding a new special token because that requires
+# `resize_token_embeddings`, which has caused device-allocation glitches on
+# some backbones (gemma-2 sliding-window cache).
 DEFAULT_PROBE = (
     "The following hidden state encodes a concept.\n"
     "Concept: {ACT}\n"
     "In one word, this concept is:"
 )
-ACT_TOKEN = " <ACT>"  # leading space helps tokenize as a single piece
+# Common across Llama / Qwen / Gemma BPE / SentencePiece vocabs as a single piece.
+ACT_PLACEHOLDER_WORD = "X"
 
 
 @dataclass
@@ -122,17 +126,25 @@ def _residual_replace_hook(
 def _build_probe_inputs(
     tokenizer, model_device: torch.device, batch_size: int,
 ) -> tuple[torch.Tensor, int]:
-    """Tokenize the probe prompt once. Returns (input_ids batched, act_pos)."""
-    # Add the ACT_TOKEN as a special token if it isn't already a single piece.
-    if " <ACT>" not in tokenizer.get_vocab() and "<ACT>" not in tokenizer.get_vocab():
-        # Add as a special additional token so the tokenizer reserves an id.
-        tokenizer.add_special_tokens({"additional_special_tokens": ["<ACT>"]})
-    text = DEFAULT_PROBE.replace("{ACT}", "<ACT>")
-    ids = tokenizer(text, return_tensors="pt").input_ids.to(model_device)  # (1, S)
-    ids = ids.expand(batch_size, -1).contiguous()
-    act_token_id = tokenizer.convert_tokens_to_ids("<ACT>")
-    act_pos = _find_act_position(ids[0], act_token_id)
-    return ids, act_pos
+    """Tokenize the probe prompt once. Returns (input_ids batched, act_pos).
+
+    The placeholder is a regular existing token (no vocab resize), located by
+    encoding the prefix-up-to-{ACT} separately and using its length as the
+    position of the placeholder. This is robust across tokenizers regardless
+    of how the placeholder word ends up split.
+    """
+    prefix = DEFAULT_PROBE.split("{ACT}")[0]
+    full = DEFAULT_PROBE.replace("{ACT}", ACT_PLACEHOLDER_WORD)
+    prefix_ids = tokenizer(prefix, return_tensors="pt", add_special_tokens=True).input_ids
+    full_ids = tokenizer(full, return_tensors="pt", add_special_tokens=True).input_ids
+    act_pos = int(prefix_ids.shape[1])  # first token of the placeholder slot
+    full_ids = full_ids.to(model_device)
+    full_ids = full_ids.expand(batch_size, -1).contiguous()
+    if act_pos >= full_ids.shape[1]:
+        raise RuntimeError(
+            f"act_pos {act_pos} out of range for tokenized prompt of length {full_ids.shape[1]}"
+        )
+    return full_ids, act_pos
 
 
 def train_adapter(
@@ -156,10 +168,6 @@ def train_adapter(
         p.requires_grad = False
     model.model.eval()
     adapter.to(device).train()
-
-    # Resize embeddings if we just added <ACT>.
-    if model.model.get_input_embeddings().num_embeddings != len(model.tokenizer):
-        model.model.resize_token_embeddings(len(model.tokenizer))
 
     # One static probe-prompt batch we replicate per minibatch.
     probe_ids, act_pos = _build_probe_inputs(model.tokenizer, device, cfg.batch_size)
@@ -194,7 +202,7 @@ def train_adapter(
             ids = probe_ids[:B]
 
             with _residual_replace_hook(block, injected, act_pos):
-                logits = model.model(input_ids=ids).logits  # (B, S, V)
+                logits = model.model(input_ids=ids, use_cache=False).logits  # (B, S, V)
             pred_logits = logits[:, cfg.label_position, :]
             loss = F.cross_entropy(pred_logits, label_ids)
 
@@ -252,7 +260,7 @@ def evaluate_adapter(
         injected = adapter(vecs)
         ids = probe_ids[:B]
         with _residual_replace_hook(block, injected, act_pos):
-            logits = model.model(input_ids=ids).logits
+            logits = model.model(input_ids=ids, use_cache=False).logits
         pred_logits = logits[:, cfg.label_position, :]
         loss = F.cross_entropy(pred_logits, label_ids, reduction="sum")
 

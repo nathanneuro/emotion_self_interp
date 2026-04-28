@@ -26,6 +26,25 @@ This is exactly the Experiment 2 (bias-prior decomposition) shape, just at small
 
 **Open methodological question.** Our top-1 token-accuracy is much harsher than Pepper's generation-scoring (LM grades whether the generated text matches the target concept). The 0.5B numbers above might rise substantially under generation-scoring even without scaling up, since "calm" and "tranquil" would both count for `calm`. Add generation-scoring evaluation before drawing strong conclusions about the bias-prior magnitude on small models.
 
+### Repeated on gemma-2-2b (L8, the canonical PC1↔valence layer for that model)
+
+| Variant | n_params | Qwen-0.5B val top-1 | Gemma-2-2b val top-1 |
+|---|---|---|---|
+| Untrained (α=1, b=0) | 0 | 0.000 | 0.000 |
+| bias_only | d | 0.167 (= 1/6) | 0.167 (= 1/6) |
+| scalar_affine | d+1 | 0.067 | 0.050 |
+| full_rank | d²+d | 0.350 | **0.600** |
+
+**Read.** full_rank improves substantially with scale (0.35 → 0.60), but scalar_affine stays stuck at chance/below. With 4× the params (and a much sharper PC1↔valence geometry, |r|=0.996 vs |r|=0.975), we'd expect *some* lift if the issue were just model scale. Instead full_rank takes off and scalar_affine stays flat — strong signal that **single-direction α·h is geometrically insufficient** at sub-7B scale, regardless of model quality.
+
+The hypothesized resolution: Pepper's 70B scalar-affine result depends on the per-emotion residual directions already being aligned with their label-token directions in the LM head's unembed matrix, so a scalar stretch along h is enough. At 0.5B–2B the residuals carry valence information (Phase 1 confirms PC1↔valence) but the alignment with label-token directions in unembed is too weak for stretch-only to discriminate 6 classes. **Predicts:** scalar_affine catches up sharply somewhere between 2B and 70B as that alignment tightens. Worth running on Llama-3-8B once GPUs are free, plus Pepper's scaling curve becomes a real prediction we can test.
+
+Also: bias_only stays at exactly 1/6 across model scales — confirming it's purely a format-prior fit and the bias prior magnitude doesn't grow with scale in our small-model regime.
+
+**Two infrastructure fixes from this run** (now in `src/adapters/train.py`):
+- Pass `use_cache=False` on the hooked forward — gemma-2's sliding-window cache initialization triggers a CUDA assert otherwise.
+- Don't add a sentinel token for the placeholder. The `resize_token_embeddings` call to accommodate a new special token caused device-allocation issues. Instead we pick a regular existing word and locate the placeholder position by tokenizing the prefix-up-to-placeholder separately. Robust across BPE / SentencePiece tokenizers.
+
 ---
 
 ## 2026-04-28 — Phase 1 v0 wraps with 7 architectures, 4 paradigms
