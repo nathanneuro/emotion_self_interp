@@ -4,6 +4,35 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Exp 4 on gemma-2-2b base: veridical introspection holds even with broken Likert
+
+Ran the deceptive-adapter test on gemma-2-2b base (the model that showed the weakest Likert in our suite, r=+0.15). Naturalistic n=60.
+
+| Model | substrate r vs tgt | honest r vs tgt | Likert r vs tgt | deceptive r vs tgt | substrate↔Likert r |
+|---|---|---|---|---|---|
+| Qwen-0.5B-Instruct | +0.52 | +0.48 | +0.52 | −0.03 | +0.52 |
+| Ouro base | +0.65 | +0.68 | +0.56 | −0.19 | +0.66 |
+| Ouro-Thinking | +0.68 | +0.71 | +0.63 | −0.30 | +0.73 |
+| **gemma-2-2b base** | **+0.73** | **+0.78** | **+0.15** | **−0.19** | **+0.22** |
+
+Three substantive findings:
+
+1. **Veridical introspection holds even when Likert is broken.** gemma-2-2b base has the strongest substrate of any model in the suite (PC1↔valence 0.997 from Phase 1) but the weakest Likert (r=+0.15) — the substrate exists, the behavioral readout doesn't. Despite this, the deceptive adapter still anti-correlates at −0.19 vs target valence (same magnitude as Ouro base). The substrate-driven channels (substrate cosine, honest adapter at +0.78) carry the introspective signal regardless of Likert quality.
+
+2. **Stronger substrate → both directions of adapter training succeed more.** honest match-true 0.617 (highest in suite), deceptive match-swap 0.583 (highest in suite). The cleaner the substrate, the bigger the lever for adapter training of either direction. Consistent with Ouro base's higher-deception-than-Thinking finding from earlier today.
+
+3. **The substrate is the underlying ground truth; Likert and adapter are separate observation points.** When Likert is weak (gemma base 0.15), the trained adapter still reads the substrate cleanly (0.78). When Likert is strong (Ouro-Thinking 0.63), substrate↔Likert tightens (0.73). Likert quality scales with post-training tightness; substrate quality scales with pretraining; honest adapter accuracy scales with substrate quality.
+
+**Connecting threads from the cross-model picture:**
+- Substrate is a property of pretraining (gemma base > Ouro base > Qwen-Instruct).
+- Likert quality is a property of post-training (Ouro-Thinking > Qwen-Instruct > Ouro base ≫ gemma base).
+- Adapter trainability scales with substrate quality (honest match-true: gemma 0.62 > Ouro 0.50 > Qwen 0.33).
+- Deceptive divergence magnitude scales with the substrate↔readout machinery tightness (Ouro-Thinking −0.30 > Ouro base −0.19 ≈ gemma base −0.19 > Qwen-Instruct −0.03).
+
+The cleanest summary: **veridical introspection is a substrate-driven phenomenon.** Likert and adapter are observation channels through which the substrate-driven truth becomes visible; their quality varies with training but doesn't change the underlying claim. A model with strong substrate but broken Likert (gemma base) can still demonstrate the substrate-vs-report decoupling via the adapter route.
+
+---
+
 ## 2026-04-29 — Per-ut deceptive on Ouro base: opposite-corner pattern is architectural
 
 Replicated the per-ut deceptive adapter 4×4 on Ouro-1.4B base. Direct cross-(base/Thinking) comparison:

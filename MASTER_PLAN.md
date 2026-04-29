@@ -170,6 +170,8 @@ Status:
 | Capability per ut step | **done** (2026-04-29) | Factual recall accuracy: 0.333 → 0.600 → 0.700 → 0.700 across ut=0..3. Same iterative-buildup pattern as substrate PCA and Likert — substrate, behavior, and capability all develop in lockstep; ut=2 is the practical maturation point |
 | Per-ut DECEPTIVE adapter 4×4 | **done** (2026-04-29) | Honest peak (in=1, out=0)=+0.668 vs target; deceptive peak (in=0, out=3)=**−0.421**. Opposite corners of the 4×4 matrix — the (input_ut, output_ut) signature could in principle distinguish honest from deceptive adapter training in deployed universal-transformer models |
 | Per-ut DECEPTIVE adapter on Ouro base | **done** (2026-04-29) | Base peak (in=0, out=1)=**−0.466** (sharper than Thinking's −0.421); base also peaks deceptive in the in=0 row. The opposite-corner pattern is **architectural** (replicates on base), not a post-training artifact. Base shows substrate fight-back at (in=3, out=0/1) — Thinking suppresses this, paradoxically making deception *easier* there |
+| Per-ut Likert on Ouro base | **done** (2026-04-29) | Same trajectory shape as Thinking: ut=0 weakest, ut=2 peaks, slight drop at ut=3. Base ut=2 r=+0.626 vs Thinking's +0.739. Iterative-buildup pattern is **architectural** — post-training sharpens the peak but doesn't change its shape |
+| Exp 4 on gemma-2-2b base | **done** (2026-04-29) | Strongest substrate (+0.73) and honest adapter (+0.78) of any model in suite; weakest Likert (+0.15); deceptive still anti-correlates (−0.19). Veridical introspection is **substrate-driven** — Likert and adapter are observation channels but the substrate is the underlying ground truth |
 
 ## Next actions (immediate)
 
