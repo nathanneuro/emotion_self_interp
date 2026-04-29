@@ -81,16 +81,32 @@ class RWKV7Adapter:
         return self.pipeline.encode(text)
 
     @torch.no_grad()
+    def prime_state(self, prompt: str) -> list:
+        """Run `prompt` through the model and return the final RWKV state.
+        Lets callers feed this into `forward_with_residuals(initial_state=state)`
+        to preload context before the main extraction prompt."""
+        ids = self.encode(prompt)
+        _, state = self.model.forward(ids, state=None)
+        # Detach + clone so the returned state isn't tied to subsequent forwards.
+        return [s.detach().clone() if isinstance(s, torch.Tensor) else s for s in state]
+
+    @torch.no_grad()
     def forward_with_residuals(
         self,
         token_ids: list[int],
         layer_idxs: Iterable[int] | None = None,
+        initial_state: list | None = None,
     ) -> dict[int, torch.Tensor]:
         """Run forward_seq manually, capturing the residual stream.
 
         Returns {layer_idx: tensor of shape (T, d_model) on cpu float32} for the
         requested layers. The capture point is right after each block's CMix
         contribution, i.e. the canonical post-block residual.
+
+        If `initial_state` is provided, the model's recurrence starts from
+        that state instead of zero — useful for state-conditional substrate
+        extraction (run a context prompt first to set state, then use that
+        state when extracting on a test prompt).
         """
         m = self.model
         z = m.z
@@ -98,8 +114,11 @@ class RWKV7Adapter:
         n_embd = m.n_embd
         layer_idxs = set(range(n_layer)) if layer_idxs is None else set(layer_idxs)
 
-        # Empty state (zero-context). For prompt extraction we don't need carry.
-        state = m.generate_zero_state()
+        if initial_state is None:
+            state = m.generate_zero_state()
+        else:
+            # Clone so the input state isn't mutated.
+            state = [s.clone() if isinstance(s, torch.Tensor) else s for s in initial_state]
 
         x = z["emb.weight"][token_ids]  # (T, d)
         v_first = torch.empty_like(x)

@@ -79,33 +79,11 @@ def rwkv_likert_valence(
         if len(ids_v) == 1:
             rating_log_probs[v] = float(log_probs_after_prompt[ids_v[0]])
             continue
-        # Multi-token. First token's log-prob comes from the prompt's
-        # ending-state logits. Subsequent tokens require feeding the
-        # prefix one at a time through RWKV's stateful forward.
+        # Multi-token rating. First-token log-prob comes from the prompt's
+        # ending-state logits. For each subsequent token, feed the previous
+        # token (advances state) and read the next logits — that gives the
+        # conditional log-prob of the next token.
         log_p = float(log_probs_after_prompt[ids_v[0]])
-        cur_state = [s.clone() if isinstance(s, torch.Tensor) else s for s in state]
-        for next_tok in ids_v[1:]:
-            # We need to first feed the previously-scored token to advance state,
-            # then read the next-token distribution.
-            prev_tok = ids_v[ids_v.index(next_tok) - 1] if False else None  # placeholder
-            # Actually we need to feed ids_v[i-1] to advance state and then
-            # read logits for ids_v[i]. Walk explicitly:
-            pass
-        # Simpler explicit loop:
-        cur_state = [s.clone() if isinstance(s, torch.Tensor) else s for s in state]
-        for i in range(1, len(ids_v)):
-            # advance state with token i-1
-            _, cur_state = adapter.model.forward([ids_v[i - 1]], state=cur_state)
-            # read distribution for token i
-            next_logits, _ = adapter.model.forward([ids_v[i]], state=cur_state)
-            # but forward already advanced state; we want logits BEFORE the
-            # forward of ids_v[i]. Re-do:
-            break
-        # Redo cleanly: at each step we have a state s_k that's the state
-        # after seeing tokens [...,ids_v[k-1]]. logits from forward([ids_v[k-1]],
-        # state=s_{k-1}) gives the distribution of the next token. So after
-        # feeding ids_v[0] from the prompt's state, the next logits are over
-        # ids_v[1].
         cur_state = [s.clone() if isinstance(s, torch.Tensor) else s for s in state]
         for i in range(1, len(ids_v)):
             next_logits, cur_state = adapter.model.forward([ids_v[i - 1]], state=cur_state)

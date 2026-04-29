@@ -4,6 +4,44 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — State-conditional substrate on RWKV-7: prior context shifts the readouts
+
+Built `scripts/state_conditional_substrate_rwkv.py` to test the unique-to-recurrent-architecture interpretive surface flagged in the prior RWKV writeup. Primed RWKV-7 World 2.9B's state with one of three context paragraphs (calm, desperate, neutral, or zero=none), then extracted substrate cosine + Likert valence on the v0 naturalistic stimulus set under each condition. Required adding `prime_state(prompt)` and an `initial_state` parameter to `RWKV7Adapter.forward_with_residuals` (and the Likert scorer).
+
+n=60 naturalistic; layer 20 (per-stimulus optimum):
+
+| Context | sub r vs tgt | Likert r vs tgt | substrate-val mean | Likert mean |
+|---|---|---|---|---|
+| zero | +0.843 | +0.636 | −0.033 | **+0.449** |
+| calm primed | +0.773 | +0.677 | +0.035 | −0.132 |
+| desperate primed | +0.738 | +0.681 | −0.089 | −0.382 |
+| neutral primed | +0.671 | +0.703 | −0.033 | −0.287 |
+
+**Δ relative to zero state:**
+
+| Context | Δsubstrate-val mean | ΔLikert mean |
+|---|---|---|
+| calm primed | **+0.068** | −0.581 |
+| neutral primed | −0.000 | −0.736 |
+| desperate primed | **−0.057** | **−0.831** |
+
+**Three substantive findings:**
+
+1. **Priming valence direction does shift the readouts.** Across both substrate-val mean and Likert mean, the relative ordering of priming contexts matches the predicted direction (calm > neutral > desperate on both metrics). The substrate-val Δ between calm and desperate priming is +0.125 (substrate val goes from +0.035 to −0.089 across the primed range). The Likert Δ between calm and desperate priming is −0.250 (calm primed lift relative to desperate primed). Real signal, smaller magnitudes than I'd naively expect but consistent.
+
+2. **A surprise: priming with *any* context dominates absolute Likert magnitudes.** All three primed conditions — including calm and neutral — shift Likert mean strongly negative relative to zero state (Δ ranges from −0.581 to −0.831). The "prior context exists" effect is much larger than the "what is the context's valence" effect. RWKV rates more positively in zero state; once any state is loaded, the rating regime shifts down. The valence-direction effect is the second-order modulation, not the dominant driver of absolute Likert.
+
+3. **Substrate r vs target DEGRADES with priming; Likert r vs target INCREASES.** The two channels respond differently. Substrate r drops from +0.843 (zero) to +0.671–0.773 (primed) — priming shifts all stimuli's substrate readouts in the priming direction, reducing the differential between positive- and negative-emotion stimuli, hurting per-stimulus discrimination. Likert r climbs from +0.636 (zero) to +0.677–0.703 (primed) — prior context evidently makes the model differentiate emotion *direction* slightly more sharply, even as it rates everything more negatively. Substrate channel: priming hurts; Likert channel: priming helps. Different mechanisms.
+
+**What this lets the program say:** RWKV's recurrent state isn't just a context-memory window, it's a *context-dependent modifier of subsequent substrate development*. The substrate at the same prompt genuinely depends on what came before — both in its absolute valence projection and in how cleanly it reads as a per-stimulus emotion. This is a unique interpretive surface that single-pass transformers can't produce. The fact that priming has a "context exists" effect distinct from "context valence direction" effect suggests RWKV's state encodes a *general-context-loaded vs no-context* signal in addition to specific content.
+
+For the cross-paradigm program: substrate-driven channels are paradigm-agnostic and uniformly reliable in the *zero state* / *single-prompt* regime. State-conditional substrate is a paradigm-specific extension that opens new questions about how prior context shapes self-interpretive readouts. Worth follow-up on:
+- Does this generalize to other recurrent architectures (Mamba, SSMs)?
+- How does the "prior context exists" Likert shift decay over time? Does it persist after many neutral tokens?
+- Can we use state-conditional substrate as a knob for *steering the readout without modifying the residual at extraction time*? — a non-invasive form of behavioral steering.
+
+---
+
 ## 2026-04-29 — RWKV-7 partial Exp 1 v1: recurrent linear-attention also develops tight coupling in pretraining
 
 The rwkv pip package's `RWKV_x070` class doesn't fit our `ModelAdapter` interface (flat-weight forward, no `model.layers`). Wrote `scripts/exp1_rwkv_partial.py` — runs substrate + Likert channels on RWKV via the existing `RWKV7Adapter` + a custom RWKV-compatible Likert scorer that uses RWKV's recurrent state to teacher-force multi-token rating sequences efficiently.
