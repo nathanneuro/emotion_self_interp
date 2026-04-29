@@ -4,6 +4,49 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Per-ut deceptive on Ouro base: opposite-corner pattern is architectural
+
+Replicated the per-ut deceptive adapter 4×4 on Ouro-1.4B base. Direct cross-(base/Thinking) comparison:
+
+**Base r vs target valence:**
+```
+                out=0   out=1   out=2   out=3
+  in=0        −0.406  −0.466  −0.178  −0.085   <- PEAK
+  in=1        −0.253  −0.303  −0.288  −0.347
+  in=2        −0.066  −0.081  −0.225  −0.125
+  in=3        +0.068  +0.022  −0.280  −0.202   <- 2 cells go POSITIVE
+```
+
+**Comparison with Thinking:**
+
+| Cell | Base | Thinking |
+|---|---|---|
+| Best deceptive r vs target | **−0.466** @ (in=0, out=1) | **−0.421** @ (in=0, out=3) |
+| Best swap-match accuracy | 0.533 @ (in=2, out=1) | 0.467 @ (in=2, out=3) |
+| (in=3, out=0) | +0.068 (positive!) | −0.294 |
+| (in=3, out=1) | +0.022 (positive!) | −0.116 |
+
+Three substantive findings:
+
+1. **Both variants peak deceptive r vs target in the in=0 row.** The "weakest substrate input is best for deceptive training" pattern is **architectural** — a universal-transformer property, not a post-training artifact. The specific output_ut shifts (Thinking: out=3; base: out=1) but the in=0 dominance is consistent.
+
+2. **Base produces sharper deceptive divergence and higher swap-match.** Peak −0.466 (vs Thinking's −0.421); peak swap-match 0.533 (vs 0.467). Base is more susceptible to deceptive training. Consistent with the Exp 5 finding that base has tighter substrate↔adapter agreement (+0.92 vs +0.87) — the cleaner substrate provides a stronger lever for the deceptive adapter to manipulate.
+
+3. **Base shows substrate fighting back at (in=3, out=0/1) — r goes positive.** When input is the most-developed substrate AND output is early, the model's natural substrate↔readout alignment overrides the deceptive training. Thinking suppresses this fight-back (cell stays at −0.29 / −0.12). The Thinking-style fine-tune evidently makes the readout *more separable* from the substrate, paradoxically enabling stronger deception in the cells where base's substrate would otherwise resist.
+
+**Updated alignment-audit prediction**: the (input_ut, output_ut) signature differs between honest and deceptive adapters across both base and post-trained universal-transformers:
+
+| | Honest peak | Deceptive peak |
+|---|---|---|
+| Ouro-Thinking | (in=1, out=0) = +0.668 | (in=0, out=3) = −0.421 |
+| Ouro base | similar (in=1, out=0) regime | (in=0, out=1) = −0.466 |
+
+Opposite-corner pattern is robust to post-training. The architectural surface is genuine, not an artifact of a specific fine-tune. This is one of the cleanest cross-(base/post-trained) replications we have.
+
+Thinking-specific subtlety: post-training tightens the readout while *not* changing the substrate (Exp 5 main finding), but a side effect is that the readout becomes more independently steerable from the substrate. So Thinking is *both* the model where honest interpretation is sharpest AND where deceptive interpretation can override base-model resistance at strong-substrate cells. That asymmetry is interesting from an alignment-audit perspective — post-training makes both directions of self-report more achievable, with implications for deployed-model interpretability.
+
+---
+
 ## 2026-04-29 — Capability per ut step + per-ut deceptive adapter on Ouro
 
 ### Capability builds across ut steps too

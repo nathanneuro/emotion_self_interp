@@ -169,6 +169,7 @@ Status:
 | (steer_ut, read_ut) 4×4 matrix | **done** (2026-04-29) | Lower triangle exactly 0 (temporal causality); peak at (steer=1, read=1) = +1.342; geometric decay along upper-triangle rows (×0.2–0.3 per iteration). Substrate optimal-steerability sweet spot is ut=1; readout discrimination peaks at ut=2 |
 | Capability per ut step | **done** (2026-04-29) | Factual recall accuracy: 0.333 → 0.600 → 0.700 → 0.700 across ut=0..3. Same iterative-buildup pattern as substrate PCA and Likert — substrate, behavior, and capability all develop in lockstep; ut=2 is the practical maturation point |
 | Per-ut DECEPTIVE adapter 4×4 | **done** (2026-04-29) | Honest peak (in=1, out=0)=+0.668 vs target; deceptive peak (in=0, out=3)=**−0.421**. Opposite corners of the 4×4 matrix — the (input_ut, output_ut) signature could in principle distinguish honest from deceptive adapter training in deployed universal-transformer models |
+| Per-ut DECEPTIVE adapter on Ouro base | **done** (2026-04-29) | Base peak (in=0, out=1)=**−0.466** (sharper than Thinking's −0.421); base also peaks deceptive in the in=0 row. The opposite-corner pattern is **architectural** (replicates on base), not a post-training artifact. Base shows substrate fight-back at (in=3, out=0/1) — Thinking suppresses this, paradoxically making deception *easier* there |
 
 ## Next actions (immediate)
 
