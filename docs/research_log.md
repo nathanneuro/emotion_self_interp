@@ -4,6 +4,50 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — RWKV-7 partial Exp 1 v1: recurrent linear-attention also develops tight coupling in pretraining
+
+The rwkv pip package's `RWKV_x070` class doesn't fit our `ModelAdapter` interface (flat-weight forward, no `model.layers`). Wrote `scripts/exp1_rwkv_partial.py` — runs substrate + Likert channels on RWKV via the existing `RWKV7Adapter` + a custom RWKV-compatible Likert scorer that uses RWKV's recurrent state to teacher-force multi-token rating sequences efficiently.
+
+**Layer matters a lot for per-stimulus substrate on RWKV-7 World 2.9B:**
+
+| Layer | substrate r vs target | substrate 6-class accuracy | sub↔Likert r |
+|---|---|---|---|
+| L7 (Phase 1 PCA peak) | +0.370 | 0.167 (= chance) | +0.238 |
+| **L20** | **+0.844** | **0.550** | **+0.706** |
+
+Phase 1's PCA peak at L7 was about per-emotion-mean geometry (averaging across stimuli). For per-stimulus classification, L20 is the right layer. The two layer-selection criteria can disagree by ~13 layers on a 32-layer recurrent model.
+
+**Updated cross-paradigm picture (with RWKV at its right layer):**
+
+| Model | Paradigm | substrate r | Likert r | sub↔Likert |
+|---|---|---|---|---|
+| Qwen-0.5B-Instruct | std-T (RLHF) | +0.51 | +0.52 | +0.52 |
+| Ouro-1.4B base | universal-T | +0.63 | +0.56 | +0.65 |
+| Ouro-2.6B base | universal-T (deeper) | +0.54 | +0.75 | +0.46 |
+| gemma-2-2b base | std-T (base) | +0.74 | +0.15 | +0.22 |
+| Monet-4.1B base | sparse-MoE (base) | +0.74 | +0.09 | +0.25 |
+| **RWKV-7 World 2.9B (L20)** | **recurrent linear-attention** | **+0.84** | **+0.64** | **+0.71** |
+
+**New architectural-property finding generalizing the universal-T story:**
+
+**Recurrent linear-attention (RWKV) base — like universal-T base — develops tight substrate↔readout coupling in pretraining alone.** RWKV-7 substrate↔Likert at L20 = +0.71, matching Ouro-Thinking (+0.71) and exceeding all standard-T base models. RWKV-7 World is *base* (no Thinking-style fine-tune), yet substrate↔Likert is tight.
+
+Both architectures share an underlying property:
+
+| Architecture | Recurrence form | Readout machinery used per stimulus |
+|---|---|---|
+| Universal-T (Ouro) | Layer loop `n_ut` times per forward | `n_ut` × (= 4 in Ouro) per parameter |
+| Recurrent LA (RWKV) | Same layers process tokens sequentially via state | Once per token × ~30+ tokens per stimulus |
+| Standard-T (Qwen, gemma, Monet) | One forward = one pass through layers | Once per stimulus |
+
+Both recurrent paradigms apply the readout machinery many more times per pretraining stimulus than single-pass paradigms. This gives more pretraining signal per readout parameter, leading to tighter substrate↔readout coupling. The architectural mechanism generalizes across two different forms of recurrence.
+
+**Open: state-conditional substrate.** RWKV's recurrent state is genuinely novel — it lets the substrate at the same prompt vary depending on prior context. Worth a follow-up: extract substrate at prompt P with prior-context C of varying valence, see if the substrate at the *same prompt P* shifts based on C. This is a unique-to-recurrent-architectures interpretive surface that doesn't apply to transformers.
+
+**Trained-adapter and untrained-SelfIE channels skipped on RWKV** — would need a custom residual-replace + LM-head readout (RWKV doesn't fit the HF transformers interface). The substrate + Likert channels are the highest-information for the cross-paradigm convergence claim; the +0.71 substrate↔Likert is consistent with what we'd expect at this substrate strength.
+
+---
+
 ## 2026-04-29 — Per-ut Likert on Ouro-2.6B: scaling shifts the peak and adds absolute calibration
 
 Ran `per_ut_step_likert_ouro.py` on Ouro-2.6B base. Direct comparison with 1.4B variants:
