@@ -167,6 +167,8 @@ Status:
 | Per-ut-step adapter on Ouro | **done** (2026-04-29) | 4×4 (input_ut, output_ut) matrix: ut=0 input weakest (top-1 0.25-0.32), ut=2 input strongest (peaks at top-1 0.43), best r vs target valence at (in=1, out=0)=+0.668. Loop-and-readout dynamics expose different aspects of the substrate-readout link at different ut-step combinations |
 | Per-ut-step steering on Ouro | **done** (2026-04-29) | calm/eu Likert at α=+0.5: ut=0 → −0.60 (no effect), ut=3 → **+0.55** (+1.03-point swing). Effect size ut=3 > ut=2 ≈ ut=1 > ut=0. Universal-transformer iterative refinement is *robust* to early-step perturbations — early steering gets washed out; only late-ut steering reaches the readout |
 | (steer_ut, read_ut) 4×4 matrix | **done** (2026-04-29) | Lower triangle exactly 0 (temporal causality); peak at (steer=1, read=1) = +1.342; geometric decay along upper-triangle rows (×0.2–0.3 per iteration). Substrate optimal-steerability sweet spot is ut=1; readout discrimination peaks at ut=2 |
+| Capability per ut step | **done** (2026-04-29) | Factual recall accuracy: 0.333 → 0.600 → 0.700 → 0.700 across ut=0..3. Same iterative-buildup pattern as substrate PCA and Likert — substrate, behavior, and capability all develop in lockstep; ut=2 is the practical maturation point |
+| Per-ut DECEPTIVE adapter 4×4 | **done** (2026-04-29) | Honest peak (in=1, out=0)=+0.668 vs target; deceptive peak (in=0, out=3)=**−0.421**. Opposite corners of the 4×4 matrix — the (input_ut, output_ut) signature could in principle distinguish honest from deceptive adapter training in deployed universal-transformer models |
 
 ## Next actions (immediate)
 

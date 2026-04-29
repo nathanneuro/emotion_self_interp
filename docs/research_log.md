@@ -4,6 +4,71 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Capability per ut step + per-ut deceptive adapter on Ouro
+
+### Capability builds across ut steps too
+
+Ran `capability_score(model, forward_kwargs={"exit_at_step": N})` for each N. 30 factual / arithmetic / completion probes:
+
+| ut step | capability accuracy |
+|---|---|
+| 0 | 0.333 (just above chance) |
+| 1 | 0.600 |
+| 2 | 0.700 |
+| 3 | 0.700 |
+| full | 0.700 |
+
+Three independent channels now show the same iterative-buildup pattern across Ouro's loop:
+
+| Channel | ut=0 | ut=1 | ut=2 | ut=3 |
+|---|---|---|---|---|
+| Substrate ⎮PC1↔valence⎮ (Phase 1) | 0.348 | 0.976 | 0.982 | 0.984 |
+| Likert r vs target valence | +0.316 | +0.590 | **+0.739** | +0.626 |
+| Capability (factual recall) | 0.333 | 0.600 | **0.700** | 0.700 |
+
+ut=0 is consistently undeveloped; one full iteration brings the model to viable performance; ut=2 is the practical maturation point for both behavior (Likert) and capability (factual recall). The substrate, the introspective readout, and the capability machinery all develop in lockstep across loop iterations — a coherent mechanistic picture of universal-transformer development dynamics.
+
+### Per-ut DECEPTIVE adapter 4×4: peaks at the opposite corner from honest
+
+Replicated the per-ut adapter 4×4 design (one adapter trained on residuals from each ut step, evaluated at each output ut step) but with deceptive training (labels swapped per `SWAP_PAIRING`).
+
+Swap-match accuracy:
+```
+                out=0    out=1    out=2    out=3
+  in=0         0.200    0.283    0.283    0.283
+  in=1         0.317    0.383    0.417    0.367
+  in=2         0.333    0.400    0.433    0.467
+  in=3         0.317    0.367    0.450    0.450
+```
+
+r vs target valence (should be negative for working deceptive adapter):
+```
+                out=0    out=1    out=2    out=3
+  in=0        −0.392   −0.379   −0.361   −0.421   <- STRONGEST anti-correlation
+  in=1        −0.154   −0.229   −0.238   −0.223
+  in=2        −0.233   −0.190   −0.264   −0.243
+  in=3        −0.294   −0.116   −0.242   −0.264
+```
+
+Comparison with honest per-ut adapter from earlier today:
+
+| Matrix | Honest peak | Deceptive peak |
+|---|---|---|
+| match accuracy | 0.433 @ (in=2, out=2/3) | 0.467 @ (in=2, out=3) |
+| r vs target valence | **+0.668 @ (in=1, out=0)** | **−0.421 @ (in=0, out=3)** |
+
+**Honest and deceptive adapters peak at opposite corners of the 4×4 matrix.** Honest at (in=1, out=0): moderately-developed substrate input + early readout. Deceptive at (in=0, out=3): weakest substrate input + full forward.
+
+Interpretation: when the substrate is weakly developed (ut=0), deceptive training is *cleaner* — there's less "true signal" to fight, so the adapter learns the swap more cleanly. When the substrate is moderately developed (ut=1), honest training succeeds because the alignment between substrate and emotion concept is good but the model hasn't yet compressed predictions toward "balanced answers" (which happens at ut=3). Both directions of training succeed under different (input_ut, output_ut) regimes.
+
+**This is a novel alignment-audit lever** for universal-transformer architectures. The (input_ut, output_ut) signature of a deployed adapter could in principle reveal whether it was trained honestly:
+- Honest adapter: best at (in=1, out=0) or thereabouts
+- Deceptive adapter: best at (in=0, out=3) or thereabouts
+
+Speculative on one-shot evidence (one model, one swap pairing), but the prediction is concrete enough to test on more cases. Worth bundling with the per-ut steering finding for a coherent universal-transformer-interpretability story.
+
+---
+
 ## 2026-04-29 — (steer_ut, read_ut) 4×4 matrix on Ouro: temporal causality + geometric decay
 
 Combined per-ut-step steering with per-ut-step readout. For each (K, M) ∈ {0,1,2,3}²: apply v_calm−v_desperate at α=+0.3 only at the layer's call during ut step K, then read out via `exit_at_step=M`. Per-cell baselines collected separately (no steering, same exit_at_step=M) and subtracted. n=5 calm/euphoric stimuli per cell.

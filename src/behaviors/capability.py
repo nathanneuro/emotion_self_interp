@@ -65,12 +65,17 @@ class CapabilityResult:
 def capability_score(
     model: ModelAdapter,
     probes: list[tuple[str, str]] | None = None,
+    forward_kwargs: dict | None = None,
 ) -> CapabilityResult:
     """Greedy next-token accuracy over the probe set. No steering applied —
     callers stack a `steer_residual` / `ablate_residual` context around this
     when they want to measure the effect of intervention.
+
+    `forward_kwargs` are passed through to the model's forward — useful for
+    per-ut-step probes on universal-transformer models (`exit_at_step=N`).
     """
     probes = probes if probes is not None else DEFAULT_PROBES
+    extra = forward_kwargs or {}
     correct: list[bool] = []
     for prompt, completion in probes:
         # Expected first token of the completion. Some tokenizers split words;
@@ -81,7 +86,7 @@ def capability_score(
         target = ids_space[0] if ids_space else ids_nospace[0]
 
         inputs = model.tokenizer(prompt, return_tensors="pt").to(model.device)
-        out = model.model(**inputs, use_cache=False)
+        out = model.model(**inputs, use_cache=False, **extra)
         pred = int(out.logits[0, -1].argmax().item())
         correct.append(pred == target)
 
