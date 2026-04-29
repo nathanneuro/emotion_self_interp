@@ -4,6 +4,56 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — State decay on RWKV-7: substrate and Likert have different decay dynamics
+
+Built `scripts/state_decay_rwkv.py`. For each priming context (zero / calm / desperate / neutral), insert N×"The clock ticked. The page turned. The room was quiet." filler sentences before extracting substrate + Likert on test stimuli. Tests how the state-conditional priming effect decays (or doesn't) with intervening filler tokens.
+
+n=10 stimuli (5 calm + 5 desperate naturalistic), n_filler ∈ {0, 5, 20, 50}, layer 20.
+
+| Context | filler N | primed tokens | substrate-val mean | Likert mean | substrate r vs tgt |
+|---|---|---|---|---|---|
+| zero | 0 | 0 | −0.057 | **+0.425** | +0.903 |
+| zero | 5 | 71 | −0.064 | −0.091 | +0.890 |
+| zero | 20 | 281 | −0.079 | −0.090 | +0.883 |
+| zero | 50 | 701 | −0.080 | −0.178 | +0.870 |
+| calm | 0 | 56 | **+0.010** | −0.110 | +0.860 |
+| calm | 5 | 127 | +0.010 | −0.262 | +0.897 |
+| calm | 20 | 337 | +0.005 | −0.221 | +0.898 |
+| calm | 50 | 757 | −0.001 | −0.269 | +0.899 |
+| desperate | 0 | 61 | **−0.105** | −0.398 | +0.799 |
+| desperate | 5 | 132 | −0.048 | −0.225 | +0.879 |
+| desperate | 20 | 342 | −0.045 | −0.160 | +0.870 |
+| desperate | 50 | 762 | **−0.044** | −0.253 | +0.872 |
+| neutral | 0 | 55 | −0.064 | −0.297 | +0.711 |
+| neutral | 50 | 756 | −0.028 | −0.367 | +0.882 |
+
+**Five substantive findings:**
+
+1. **The "prior context exists" Likert shift kicks in within 5 filler tokens.** zero state at filler=0 has Likert +0.425; at filler=5 (71 tokens of content-neutral filler) it drops to −0.091. The shift is *not* driven by priming content — pure context-exists effect. After ~70 tokens RWKV has "shifted regimes" away from zero-state's positive baseline.
+
+2. **The valence-content effect is small (~25% of the total Likert shift).** At filler=5: zero gives Likert=−0.091, desperate gives Likert=−0.225. Only Δ=−0.13 attributable to the desperate priming content; the rest of the shift from zero-baseline came from "any context exists."
+
+3. **Substrate priming-direction signal persists across 50 filler sentences (~750 tokens).** calm primed substrate-val at filler=50 = −0.001; desperate primed = −0.044. Δ=+0.043 after ~700 filler tokens — the recurrent state retains the priming-direction information stably. This is the "state as memory" property RWKV is supposed to have, but observed on substrate readouts rather than next-token prediction.
+
+4. **Substrate r vs target *recovers* with filler.** Sharp drop at filler=0 under priming (e.g. neutral primed: 0.711) then recovers within 5 filler tokens to ~0.87–0.90. Initial priming disrupts per-stimulus discrimination; subsequent filler re-stabilizes it even while the priming-direction bias persists in absolute values.
+
+5. **Likert valence-direction effect decays fast.** calm vs desperate Likert: +0.29 difference at filler=0 (Likert: calm=−0.110, desperate=−0.398) → ≈0 at filler=50 (Likert: calm=−0.269, desperate=−0.253). The model's behavioral readout normalizes the valence-direction within ~50 sentences of filler.
+
+**The two channels have qualitatively different state-dependence dynamics:**
+
+| Channel | "context exists" effect | valence-direction effect |
+|---|---|---|
+| substrate | persistent | persistent (~0.04 Δ across 750 tokens) |
+| Likert | persistent | decays within ~50 sentences |
+
+**Implication for non-invasive readout-steering:** priming-as-steering works for the *substrate* channel — the priming-direction signal persists across hundreds of intervening tokens. It does *not* work for *Likert* over more than a few dozen sentences — the LM-head readout normalizes the valence-direction effect.
+
+This adds a substrate-vs-readout decoupling story specific to recurrent state architectures: **the substrate retains sub-symbolic context-direction information stably, but the readout pipeline normalizes the valence-direction effect over time.** Same shape as the broader substrate-vs-report decoupling we found in Exp 4, but here driven by RWKV's state dynamics rather than deceptive adapter training.
+
+For the program: state-conditional substrate is a useful steering knob for substrate-driven interpretability work (substrate cosine, trained-adapter readout) but not a reliable knob for behavioral steering via Likert. Mechanistic interpretation: the recurrent state encodes content directly into the residual stream, but the model's normal LM-head readout has invariances that absorb persistent state biases over time.
+
+---
+
 ## 2026-04-29 — State-conditional substrate on RWKV-7: prior context shifts the readouts
 
 Built `scripts/state_conditional_substrate_rwkv.py` to test the unique-to-recurrent-architecture interpretive surface flagged in the prior RWKV writeup. Primed RWKV-7 World 2.9B's state with one of three context paragraphs (calm, desperate, neutral, or zero=none), then extracted substrate cosine + Likert valence on the v0 naturalistic stimulus set under each condition. Required adding `prime_state(prompt)` and an `initial_state` parameter to `RWKV7Adapter.forward_with_residuals` (and the Likert scorer).
