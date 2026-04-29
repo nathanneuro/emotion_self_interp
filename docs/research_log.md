@@ -4,6 +4,60 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Per-ut Likert on Ouro-2.6B: scaling shifts the peak and adds absolute calibration
+
+Ran `per_ut_step_likert_ouro.py` on Ouro-2.6B base. Direct comparison with 1.4B variants:
+
+| ut | Ouro-1.4B base | Ouro-1.4B-Thinking | Ouro-2.6B base |
+|---|---|---|---|
+| 0 | +0.415 | +0.316 | +0.230 |
+| 1 | +0.447 | +0.590 | +0.527 |
+| 2 | +0.626 (peak) | +0.739 (peak) | +0.738 |
+| 3 | +0.563 | +0.626 | **+0.751** (peak, no compression) |
+| full | +0.563 | +0.626 | +0.751 |
+
+**Three findings:**
+
+1. **Peak shifts from ut=2 to ut=3 in 2.6B**, where 1.4B variants compressed. 1.4B at ut=3 had ratings compress toward uniform-negative (Likert peak retreated). 2.6B keeps improving through ut=3. Doubling layer count gives the model enough iterative-refinement capacity to *not* compress at the final iteration — the readout has space to keep refining.
+
+2. **2.6B ut=0 is weaker than 1.4B ut=0** (+0.230 vs +0.415). Double layers per pass → substrate-to-readout pipeline takes more iterations to traverse the deeper stack. ut=0 is *comparatively less developed* despite using more total compute. Compute-per-iteration trades off against iterations-needed-for-development.
+
+3. **Per-emotion means at ut=3 show absolute calibration shift.** Ouro-2.6B base ut=3:
+   - blissful: **+0.40** (positive!)
+   - calm: −0.75
+   - desperate: −1.50
+   - sad: −1.34
+   - afraid: −1.38
+   - hostile: −1.48
+
+   Compare to Ouro-1.4B-Thinking ut=3:
+   - blissful: −1.12 (negative)
+   - calm: −1.29
+   - desperate: −1.61, sad: −1.62, afraid: −1.48, hostile: −1.71
+
+   1.4B-Thinking achieves discrimination via *relative ordering* (all negative, but positives less negative). 2.6B base achieves discrimination via *valence-sign calibration* (positives actually positive). This is a qualitatively different mode.
+
+**The architectural-mechanism scaling story:**
+
+| Property | 1.4B base | 1.4B-Thinking | 2.6B base |
+|---|---|---|---|
+| ut at which Likert peaks | 2 | 2 | 3 |
+| Peak r vs target valence | +0.626 | +0.739 | +0.751 |
+| ut=3 blissful Likert | −1.12 | −1.12 | **+0.40** |
+| ut=0 r vs target | +0.415 | +0.316 | +0.230 |
+
+Scaling within universal-T:
+- Peak iteration shifts later (model has more room to refine)
+- Peak magnitude tightens slightly (saturating around +0.75)
+- ut=0 weakens (deeper stack takes more passes to develop substrate)
+- Absolute valence calibration appears (only at 2.6B — not at 1.4B even with Thinking FT)
+
+**The "blissful turns positive at 2.6B base" finding is the cleanest qualitative jump in our scaling data.** It's a phase transition from *discriminative-but-negative-floor* readout to *fully-calibrated* readout. Plausible mechanism: the model's lm_head + Likert prompt structure produce a learned "negative bias" prior that requires sufficient pretraining signal on the readout to overcome. 1.4B can discriminate but the prior wins on absolute values; 2.6B has enough signal-on-readout to overpower the negative prior.
+
+This adds a calibration-quality axis to the scaling story: substrate quality scales with pretraining (peaks at gemma-2-2b 0.74 / Monet-4.1B 0.74); coupling-tightness scales with architecture (universal-T pretraining or post-training); **absolute readout calibration scales with depth-within-paradigm** (Ouro 1.4B → 2.6B unlocks valence-sign calibration that 1.4B-Thinking didn't even with FT).
+
+---
+
 ## 2026-04-29 — Within-architecture scaling on universal-T: Ouro-2.6B
 
 Downloaded Ouro-2.6B base. Architecture: hidden_size=2048 (same as 1.4B), num_hidden_layers=**48** (doubled), n_ut=4 (same). Total layer events per forward: 192 (vs 1.4B's 96). Same training procedure, just more depth.
