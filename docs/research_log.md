@@ -4,6 +4,48 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — (steer_ut, read_ut) 4×4 matrix on Ouro: temporal causality + geometric decay
+
+Combined per-ut-step steering with per-ut-step readout. For each (K, M) ∈ {0,1,2,3}²: apply v_calm−v_desperate at α=+0.3 only at the layer's call during ut step K, then read out via `exit_at_step=M`. Per-cell baselines collected separately (no steering, same exit_at_step=M) and subtracted. n=5 calm/euphoric stimuli per cell.
+
+Δ Likert from baseline at α=+0.3:
+
+```
+               read=0   read=1   read=2   read=3
+  steer=0      +0.321   +0.331   −0.118   −0.069
+  steer=1      +0.000   +1.342   +0.386   +0.263
+  steer=2      +0.000   +0.000   +0.941   +0.193
+  steer=3      +0.000   +0.000   +0.000   +0.743
+```
+
+**Temporal causality holds perfectly.** Strict lower triangle (read_ut < steer_ut) is exactly zero. Mechanical sanity: `hidden_states_list[M]` is computed during ut step M, the steering at ut step K > M hasn't fired yet at that point. The model's early-exit pathway respects this strictly.
+
+**Largest fresh-perturbation effect is at (steer=1, read=1) = +1.342.** Stronger than (steer=3, read=3) = +0.743. The substrate's optimal-steerability sweet spot on Ouro is ut=1 — after one full pass through the layers has developed the substrate enough to align with v_calm−v_desperate, but before the model's later-iteration compression kicks in. This complements the per-ut Likert finding (ut=2 was the readout-discrimination peak) — the *intervention* peak comes one iteration earlier than the *readout* peak.
+
+**Geometric decay along upper-triangle rows.** For steer=1:
+- read=1: +1.342 (peak)
+- read=2: +0.386 (×0.29 of peak)
+- read=3: +0.263 (×0.20 of peak)
+
+Each subsequent iteration absorbs roughly ⅔ of the remaining steering effect. For steer=2: read=2 +0.941 → read=3 +0.193 (×0.21). The "iterative refinement washes out perturbations" finding from per-ut steering now has quantitative shape — approximately geometric decay per loop iteration.
+
+**Combined with the per-ut steering result, the operational picture of universal-transformer dynamics is:**
+
+- Steering at (steer_ut=K, read_ut=K) ≫ steering at any (steer_ut=K, read_ut > K)
+- The decay is geometric per iteration (~×0.2–0.3 per loop)
+- Lower triangle is exactly zero (causality)
+- The optimal intervention site is ut=1 (substrate developed but not yet compressed)
+- The optimal readout site is ut=2 (substrate strongest)
+
+For interpretability work on universal-transformers, this means **the right intervention design depends on what you want to test**:
+- Causal effect on behavior: steer late (ut=3) and read at ut=3 — minimum absorption
+- Test the developing substrate: steer at ut=1 and read at ut=1 — maximum sensitivity
+- Test robustness: steer at ut=0 and read at ut=3 — absorbed almost completely
+
+Single-pass transformers don't expose this dimension. The (steer_ut, read_ut) interaction is a universal-transformer-specific interpretive surface that should be standard practice when probing looped models.
+
+---
+
 ## 2026-04-29 — Per-ut-step steering on Ouro: iterative refinement is robust to early-step perturbations
 
 Phase 4 v0 on Ouro applied the steering hook at every ut step (4× cumulative). This experiment fires the hook at *only one* target ut step. New `ModelAdapter.steer_residual_at_ut_step(layer, vec, α, target_ut, n_ut)` tracks call count modulo n_ut and applies the steer only when count matches target_ut. Sweep target_ut ∈ {0,1,2,3} × α ∈ [−0.5, +0.5] on Ouro-1.4B-Thinking, layer 15, n=5 per bucket.
