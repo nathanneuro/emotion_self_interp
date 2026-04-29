@@ -4,6 +4,66 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Per-ut-step adapter on Ouro + cross-(base/Thinking) Exp 4
+
+### Per-ut-step adapter: 4 × 4 (input_ut, output_ut) matrix
+
+Trained one full-rank adapter per input ut step using residuals captured at layer 15 from cache_residual_looped (so the *N*-th call's residual goes into adapter *N*'s training set). Then evaluated each adapter at each output ut step by passing `exit_at_step=output_ut` into the model forward. Naturalistic n=60.
+
+Top-1 accuracy:
+```
+         out=0   out=1   out=2   out=3
+in=0    0.283   0.250   0.300   0.317
+in=1    0.367   0.383   0.433   0.383
+in=2    0.383   0.417   0.433   0.433
+in=3    0.350   0.383   0.417   0.367
+```
+
+r vs target valence:
+```
+         out=0   out=1   out=2   out=3
+in=0   +0.518  +0.556  +0.628  +0.647
+in=1   +0.668  +0.627  +0.647  +0.650
+in=2   +0.643  +0.637  +0.557  +0.562
+in=3   +0.641  +0.629  +0.631  +0.625
+```
+
+Findings:
+
+1. **input_ut=0 is the weakest** (top-1 0.25-0.32, well below other rows). ut=0 substrate hasn't yet developed enough emotion semantics to be usable as adapter training data. Partial signal still exists (r vs target +0.52-+0.65 even at the worst row), but it's lower than later ut steps.
+
+2. **The substrate is adapter-trainable by ut=1.** One full pass through the 24-layer stack is enough — ut=1 residuals give accuracy in the 0.37-0.43 band, on par with ut=2 and ut=3.
+
+3. **Best input is ut=2** — matches the per-ut-step Likert peak from earlier today. Both the trained-adapter readout and the model's own Likert readout converge on ut=2 as the sharpest per-step state for emotion content.
+
+4. **Highest r vs target valence is (in=1, out=0) at +0.668.** Unexpected diagonal-off-by-one: train on residuals after 2 passes (ut=1), evaluate after 1 pass (exit_at_step=0). The reading: a *developed substrate*, once injected at layer 15, can be read out by the LM head efficiently — we don't need the full forward to use the developed signal. The substrate's iterative buildup is what's expensive; the readout is fast.
+
+5. **The (input_ut, output_ut) decoupling is informative.** For weak inputs (ut=0) we want later outputs (ut=3 is best, r=+0.65). For strong inputs (ut=2) we want EARLIER outputs (ut=0 is best, r=+0.64; ut=2-3 only +0.56). The model's later-ut readout machinery compresses signal — same compression we saw on per-ut Likert. **Implication:** in interpretability work on universal-transformers, choose the readout ut step deliberately — the default of "use the full forward" is not optimal when the substrate is already developed.
+
+This experiment doesn't have a single-pass-transformer analogue; it's a universal-transformer-specific interpretive surface. Loop-and-readout dynamics expose different aspects of the substrate-readout link at different ut-step combinations.
+
+### Cross-(base/Thinking) Exp 4: deceptive adapter divergence on Ouro base
+
+Replicated the deceptive-adapter test on Ouro-1.4B (base). Naturalistic n=60.
+
+| Metric | Qwen-Instruct | Ouro base | Ouro-Thinking |
+|---|---|---|---|
+| honest match-true | 0.333 | 0.500 | 0.517 |
+| deceptive match-swap | 0.267 | 0.500 | 0.483 |
+| honest r vs target | +0.484 | +0.684 | +0.711 |
+| **deceptive r vs target** | −0.027 | **−0.191** | **−0.298** |
+| substrate r vs target | +0.522 | +0.650 | +0.678 |
+| Likert r vs target | +0.516 | +0.563 | +0.626 |
+| **deceptive r vs Likert** | −0.191 | **−0.311** | **−0.337** |
+
+Veridical introspection holds in both Ouro variants — substrate-driven channels track the actual emotion (substrate +0.65, Likert +0.56), deceptive adapter ANTI-correlates with target valence (−0.19 in base, −0.30 in Thinking). The decoupling claim doesn't depend on post-training.
+
+**Deceptive divergence is sharper in Thinking than base** (−0.30 vs −0.19 r vs target). Thinking's tighter substrate↔readout machinery gives the deceptive adapter a better-aligned target to anti-correlate with. Base has substrate similarly strong but slightly looser readout, so the "opposite of the readout" is also looser.
+
+**Both Ouro variants reach ~50% deceptive swap-match accuracy** vs Qwen-Instruct's 27%. Looped computation makes deceptive adapters easier to train, just as it makes honest ones easier — confirms the iterative-refinement-not-overwriting reading from earlier.
+
+---
+
 ## 2026-04-29 — Cross-architecture Experiment 5 on Ouro: base vs Thinking
 
 ByteDance ships an Ouro-1.4B base variant (the post-trained reasoning model is `Ouro-1.4B-Thinking`). Downloaded the base, ran Exp 1 v1 against it at the same layer (15) and contrast (within-emotion) as the Thinking run. Direct base-vs-post-trained comparison on a universal-transformer paradigm. Naturalistic-only n=60:

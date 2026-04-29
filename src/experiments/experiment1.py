@@ -106,6 +106,7 @@ def _adapter_scores_batched(
     residuals: torch.Tensor,                 # (N, d) cpu fp32
     layer: int,
     label_token_seqs: dict[str, list[int]],
+    forward_kwargs: dict | None = None,
 ) -> list[dict[str, float]]:
     """Score N stimuli × E emotions in a single forward by tiling.
 
@@ -148,8 +149,11 @@ def _adapter_scores_batched(
     injected = adapter(h_dev)                              # (N, d)
     injected_NE = injected.unsqueeze(1).expand(N, E, -1).reshape(N * E, -1).contiguous()
 
+    extra = forward_kwargs or {}
     with _residual_replace_hook(block, injected_NE, act_pos):
-        out = model.model(input_ids=input_ids, attention_mask=attn_mask, use_cache=False)
+        out = model.model(
+            input_ids=input_ids, attention_mask=attn_mask, use_cache=False, **extra,
+        )
     log_probs = F.log_softmax(out.logits.float(), dim=-1)
 
     results: list[dict[str, float]] = []

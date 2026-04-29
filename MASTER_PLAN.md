@@ -163,6 +163,8 @@ Status:
 | Cross-arch Phase 4 α-sweep | **Ouro-1.4B done** (2026-04-29) | Monotonic α→Likert response holds under universal-transformer looping; capability flat through \|α\|≤0.2, collapses at \|α\|=2; sharper saturation than Qwen consistent with the 4× cumulative hook firings per forward |
 | Per-ut-step Likert | **Ouro-1.4B done** (2026-04-29) | Likert r vs target valence across ut steps: 0.316→0.590→**0.739**→0.626. Behavioral readout follows the substrate's iterative-buildup trajectory; peak at ut=2 not ut=3 — early-exit may give better discrimination than full forward |
 | Cross-arch Exp 5 (Ouro base vs Thinking) | **done** (2026-04-29) | substrate +0.63 (base) vs +0.66 (Thinking); Likert +0.56→+0.63; substrate↔Likert +0.65→+0.71. Same shape as Qwen base vs Instruct — post-training reshapes the readout, not the substrate, on both standard-transformer and universal-transformer paradigms |
+| Cross-arch Exp 4 (Ouro base) | **done** (2026-04-29) | honest +0.68, substrate +0.65, Likert +0.56, deceptive **−0.19** (vs target valence) and **−0.31** (vs Likert) — veridical introspection holds in base universal-transformer; deceptive divergence sharper in Thinking (−0.30) than base (−0.19) but same direction |
+| Per-ut-step adapter on Ouro | **done** (2026-04-29) | 4×4 (input_ut, output_ut) matrix: ut=0 input weakest (top-1 0.25-0.32), ut=2 input strongest (peaks at top-1 0.43), best r vs target valence at (in=1, out=0)=+0.668. Loop-and-readout dynamics expose different aspects of the substrate-readout link at different ut-step combinations |
 
 ## Next actions (immediate)
 
