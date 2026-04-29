@@ -4,6 +4,55 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Phase 4 α-sweep on Monet-4.1B (sparse-MoE): cross-paradigm Phase 4 complete
+
+Last α-sweep needed for cross-paradigm coverage. Predicted: messy α-response like gemma (Monet base substrate↔Likert is +0.25, loose). n=5 per bucket.
+
+calm/eu Likert response:
+| α | Likert |
+|---|---|
+| −2.0 | −0.64 (reversed!) |
+| −1.0 | −1.24 |
+| −0.5 | −1.27 (negative-arm minimum) |
+| 0.0 | −0.99 |
+| +0.5 | −0.66 |
+| +1.0 | −0.18 |
+| +2.0 | +0.61 |
+
+**Non-monotonic on the negative arm.** Different specific shape from gemma's V-spike but same family: from α=0 the Likert goes more negative until α=−0.5, then *reverses upward* at large negative α. The positive arm is monotonic.
+
+Capability stays in 0.63–0.80 across the entire α range — never breaks even at ±2. Same robustness pattern as gemma-2-2b base.
+
+**Final cross-paradigm Phase 4 picture (5 models, 4 paradigms):**
+
+| Model | Paradigm | Sub↔Likert r | Cap at α=±2 | α-response shape |
+|---|---|---|---|---|
+| Qwen-0.5B-Instruct | std-T (RLHF) | +0.52 | 0.33–0.40 | clean monotonic |
+| Ouro-1.4B base | universal-T (base) | +0.65 | 0.00 | clean monotonic |
+| Ouro-1.4B-Thinking | universal-T (FT) | +0.71 | 0.00 | clean monotonic |
+| gemma-2-2b base | std-T (base) | +0.22 | 0.63 | messy V-spike |
+| Monet-vd-4.1B base | sparse-MoE (base) | +0.25 | 0.63 | messy neg-arm reversal |
+
+**Two crystallized cross-architectural patterns:**
+
+1. **Tight substrate↔Likert (≥+0.52) → clean monotonic α-response, capability breaks at α=±2.** All three of these are post-trained or universal-transformer.
+
+2. **Loose substrate↔Likert (~+0.22–+0.25) → messy non-monotonic α-response on the negative arm, capability robust to α=±2.** Both base standard-transformer and base sparse-MoE.
+
+**Universal-transformer is the only architecture where the substrate↔Likert link develops in pretraining alone.** Both standard-transformer-base and sparse-MoE-base have loose coupling and messy Phase 4 behavior. Looping computation gives `n_ut`× training signal to the readout machinery during pretraining; single-pass paradigms (standard or sparse-MoE) need deliberate post-training to develop the same coupling.
+
+**Bonus mechanistic observation:** larger models (gemma 2B, Monet 4B) preserve capability much better under steering than smaller models (Qwen 0.5B, Ouro 1.4B). Plausible: more parameter redundancy means single-direction perturbations are absorbed without breaking factual recall. Capability robustness scales with model size; substrate-readout coupling tightness is architecture-paradigm-dependent.
+
+**Implications for the program:**
+
+- The Phase 4 / Lindsey-style causal-dependence test as designed (using Likert as the behavioral DV) is reliable on post-trained standard-transformers and on universal-transformer base+post-trained, but unreliable on base standard-transformers and base sparse-MoE.
+- The substrate↔adapter convergence (r=0.87–0.92 across all 5 models) is the most architecture-robust signal for the convergence claim. For testing causal dependence on base models with loose Likert coupling, the trained-adapter readout is the right DV.
+- The mechanistic story for *why* universal-transformers develop tight substrate↔readout coupling in pretraining alone (`n_ut`× training signal on the readout machinery per stimulus) is a substantive prediction about looped vs single-pass computation that should generalize to other looped/recurrent architectures.
+
+The cross-paradigm Phase 4 picture is now closed. The substrate-driven channels (substrate cosine, trained adapter) provide a paradigm-agnostic causal-dependence test. The Likert channel is paradigm-conditional.
+
+---
+
 ## 2026-04-29 — Phase 4 α-sweep on Ouro base: it's substrate↔Likert tightness, not post-training
 
 After the gemma-2-2b base finding (messy α-response, hypothesized "post-training is required for clean Phase 4"), ran the same sweep on Ouro-1.4B base to distinguish:
