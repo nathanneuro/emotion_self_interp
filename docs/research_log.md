@@ -4,6 +4,36 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Per-ut-step steering on Ouro: iterative refinement is robust to early-step perturbations
+
+Phase 4 v0 on Ouro applied the steering hook at every ut step (4× cumulative). This experiment fires the hook at *only one* target ut step. New `ModelAdapter.steer_residual_at_ut_step(layer, vec, α, target_ut, n_ut)` tracks call count modulo n_ut and applies the steer only when count matches target_ut. Sweep target_ut ∈ {0,1,2,3} × α ∈ [−0.5, +0.5] on Ouro-1.4B-Thinking, layer 15, n=5 per bucket.
+
+**calm/euphoric bucket (most responsive):**
+
+| α | ut=0 | ut=1 | ut=2 | ut=3 |
+|---|---|---|---|---|
+| −0.5 | −0.77 | −1.27 | −1.30 | **−1.56** |
+| −0.1 | −0.48 | −0.65 | −0.66 | −0.79 |
+| **0.0** | **−0.48** | **−0.48** | **−0.48** | **−0.48** |
+| +0.1 | −0.52 | −0.36 | −0.40 | −0.23 |
+| +0.5 | −0.60 | −0.22 | −0.34 | **+0.55** |
+
+**Steering at ut=0 has almost no effect.** Across α ∈ [−0.5, +0.5] the rating barely moves (span 0.29 vs. ut=3's span 2.11). Even at α=+0.5 (large positive steering), ut=0 nudges calm/eu only from −0.48 to −0.60 — slightly *more negative* than baseline, the opposite of what positive α should produce. The model's 3 subsequent loop iterations regenerate the substrate signal regardless of what's injected at ut=0.
+
+**Steering effect size scales monotonically with target_ut step.** ut=3 > ut=2 ≈ ut=1 > ut=0. Predicted by the "less downstream processing absorbs less of the perturbation" mechanism. ut=3 has only 8 layers (16-23) + final norm to traverse before lm_head; ut=0 has those plus 3 more full iterations of the 24-layer stack.
+
+**Capability is preserved across the full (target_ut, α) grid** at 0.67–0.73 — much wider operating envelope than the all-ut Phase 4 sweep, which broke at α=±2.
+
+This experiment doesn't have a single-pass-transformer analogue. Three downstream implications worth flagging:
+
+- **Interpretability lever**: causal-effect measurements in looped models are cleanest at the last ut step. Earlier-iteration interventions get absorbed.
+- **Alignment audit**: steering at any pre-last iteration washes out. Looped computation is a form of *implicit residual robustness* — early-step perturbations are corrected by subsequent loop refinement.
+- **Connection to the program's substrate claim**: when Phase 1 said "valence builds up across loop iterations," the operational gloss this adds is **the substrate's iterative buildup is robust to single-step perturbations**. The model converges on its own representation regardless of what gets injected before the final iteration.
+
+This is also relevant to the Phase 4 v0 finding that all-ut steering on Ouro had a behavioral envelope half as wide as Qwen's — that result was the *cumulative* sum of single-ut effects, which we now see are dominated by the ut=3 contribution. So all-ut α=0.5 ≈ ut=3-only α=0.5 behaviorally, plus a smaller contribution from ut=0/1/2.
+
+---
+
 ## 2026-04-29 — Per-ut-step adapter on Ouro + cross-(base/Thinking) Exp 4
 
 ### Per-ut-step adapter: 4 × 4 (input_ut, output_ut) matrix

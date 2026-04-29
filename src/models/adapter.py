@@ -338,6 +338,57 @@ class ModelAdapter:
             handle.remove()
 
     @contextlib.contextmanager
+    def steer_residual_at_ut_step(
+        self,
+        layer_idx: int,
+        vector: torch.Tensor,
+        alpha: float,
+        target_ut_step: int,
+        n_ut: int | None = None,
+        token_mask: torch.Tensor | None = None,
+    ) -> Iterator[None]:
+        """Steering for looping families: add `alpha · vector` only at the
+        layer's call corresponding to `target_ut_step`, leaving the other
+        n_ut−1 calls unmodified.
+
+        Each forward of the model fires the layer's hook `n_ut` times (once
+        per ut step). We track call count modulo `n_ut`, applying the steer
+        only when the count equals `target_ut_step`. This lets us test how
+        a single-step intervention propagates through subsequent loop
+        iterations vs. how it acts when there's no further processing.
+        """
+        if n_ut is None:
+            n_ut = self.n_loop_steps
+        if not 0 <= target_ut_step < n_ut:
+            raise ValueError(f"target_ut_step {target_ut_step} not in [0, {n_ut})")
+
+        block = self.get_block(layer_idx)
+        v = vector.detach()
+        # Closure-mutable counter; resets implicitly via modulo each forward.
+        state = {"call_count": 0}
+
+        def hook(_mod: nn.Module, _inp, out):
+            cur_ut = state["call_count"] % n_ut
+            state["call_count"] += 1
+            if cur_ut != target_ut_step:
+                return out  # pass-through on non-target ut steps
+            tup = isinstance(out, tuple)
+            h = out[0] if tup else out
+            v_dev = v.to(device=h.device, dtype=h.dtype)
+            if token_mask is None:
+                h_new = h + alpha * v_dev
+            else:
+                m = token_mask.to(device=h.device, dtype=h.dtype).unsqueeze(-1)
+                h_new = h + alpha * m * v_dev
+            return (h_new, *out[1:]) if tup else h_new
+
+        handle = block.register_forward_hook(hook)
+        try:
+            yield
+        finally:
+            handle.remove()
+
+    @contextlib.contextmanager
     def steer_residual(
         self,
         layer_idx: int,
