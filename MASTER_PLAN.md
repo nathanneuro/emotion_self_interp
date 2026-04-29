@@ -174,6 +174,7 @@ Status:
 | Exp 4 on gemma-2-2b base | **done** (2026-04-29) | Strongest substrate (+0.73) and honest adapter (+0.78) of any model in suite; weakest Likert (+0.15); deceptive still anti-correlates (−0.19). Veridical introspection is **substrate-driven** — Likert and adapter are observation channels but the substrate is the underlying ground truth |
 | Exp 4 on Monet-vd-4.1B (sparse-MoE) | **done** (2026-04-29) | substrate +0.74 (strongest in suite), honest +0.66, Likert +0.09 (weakest), deceptive −0.21. **Veridical introspection holds on sparse-MoE — cross-paradigm coverage now complete (4 architecture classes)**. Sparse routing dampens adapter trainability vs dense FFNs |
 | Exp 1 v1 on Monet-vd-4.1B | **done** (2026-04-29) | substrate +0.74, adapter +0.69, untrained +0.27, Likert +0.09. Substrate↔adapter r=**+0.91** (highest in suite, ahead of Ouro-Thinking's +0.87). Sparse-MoE shows largest "training matters" lift (untrained 0.27 → adapter 0.69, +0.42pp) of any model — Pepper's claim holds clearest here |
+| Phase 4 α-sweep on gemma-2-2b base | **done** (2026-04-29) | Capability robust across α=[−2,+2] (vs Qwen+Ouro break at ±2). Positive α monotonic but baseline Likert ~0; needs α≥+0.5 to leave noise floor. Negative arm non-monotonic. **Lindsey-style causal-dependence test works cleanly only when substrate↔Likert is post-training-tightened**; on base models substrate is steerable but Likert is unreliable |
 
 ## Next actions (immediate)
 
