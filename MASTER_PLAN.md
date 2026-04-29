@@ -159,6 +159,7 @@ Status:
 | 6 — Exp 4 | **done** (2026-04-28) | Deceptive adapter learned swap; substrate / Likert / honest stay at r=+0.48–+0.52 vs target; deceptive collapses to r=−0.03 |
 | 6 — Exp 5 | **done** (2026-04-28) | Qwen-0.5B base vs instruct: substrate same/stronger in base; Likert + substrate↔Likert link strengthens with instruct. Post-training reshapes the readout, not the substrate |
 | Cross-arch Exp 1 v1 | **Ouro-1.4B done** (2026-04-28) | Universal-transformer at layer 15 (ut=3): substrate +0.66, adapter +0.63, untrained +0.42, Likert +0.63 vs target valence. Substrate↔Likert r=+0.71 — tightest cross-channel agreement of any architecture |
+| Cross-arch Exp 4 | **Ouro-1.4B done** (2026-04-29) | honest +0.71, substrate +0.68, Likert +0.63 vs target; deceptive collapses to **−0.30** (vs target) / **−0.34** (vs Likert) — even cleaner divergence than Qwen-Instruct. Universal-transformer looping *sharpens* both honest and deceptive adapter learning |
 
 ## Next actions (immediate)
 

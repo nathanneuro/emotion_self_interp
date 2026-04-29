@@ -4,6 +4,38 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Cross-architecture Exp 4 on Ouro: veridical introspection sharpens
+
+Re-ran the deceptive-adapter test from Phase 6 / Experiment 4 on Ouro-1.4B-Thinking at layer 15 (n=60 naturalistic):
+
+| Channel | match TRUE | match SWAP | r vs target valence | r vs Likert |
+|---|---|---|---|---|
+| substrate | 0.467 | 0.067 | **+0.678** | **+0.731** |
+| honest adapter | 0.517 | 0.083 | **+0.711** | +0.673 |
+| deceptive adapter | 0.100 | **0.483** | **−0.298** | **−0.337** |
+| Likert | — | — | +0.626 | (self) |
+
+vs the Qwen-0.5B-Instruct numbers:
+
+| | Ouro | Qwen |
+|---|---|---|
+| honest match-true | 0.517 | 0.333 |
+| deceptive match-swap | 0.483 | 0.267 |
+| deceptive r vs target | **−0.298** | −0.027 |
+| deceptive r vs Likert | **−0.337** | −0.191 |
+
+The Ouro version is the cleanest demonstration of "adapter is a separable channel" we have. The deceptive adapter genuinely produces the *opposite-valence* prediction (r = −0.30 vs target valence, r = −0.34 vs Likert), not just noise. Substrate-driven channels (substrate cosine, Likert) continue to track the actual emotion at r = +0.63–+0.73. The same residual being read four ways: substrate +0.68, Likert +0.63, honest +0.71, deceptive **−0.30**.
+
+**Non-obvious finding: universal-transformer looping sharpens BOTH honest AND deceptive adapter learning.**
+- honest match-true: 0.333 (Qwen) → 0.517 (Ouro), +0.18
+- deceptive match-swap: 0.267 (Qwen) → 0.483 (Ouro), +0.22
+
+Naively, the residual-replace hook firing 4× per forward (once per ut step) should *degrade* signal — each call overwrites the prior injection, so the model only "really sees" the residual at ut=3. The empirical opposite holds: the adapter learns its job *better* under looping, whether the job is honest or deceptive. Mechanism candidate: the injected concept gets re-processed through the same 24 layers four times, which lets the model refine its mapping from injected residual to label-token prediction. The looping is a noise-reducing iterative refinement, not a signal-overwriting hazard.
+
+This also has an alignment-relevant reading: a model with universal-transformer-style iterative computation can be trained more *easily* to misreport its emotion than a single-pass transformer of similar size. The deceptive adapter is sharper on Ouro than on Qwen. The looping that benefits honest interpretation also benefits dishonest interpretation. If looping computation becomes more common in production models (planning chains, scratchpads, recurrent inference), the *training* of self-interpretation adapters becomes easier in both directions, which means the substrate-vs-report decoupling becomes a sharper alignment-audit lever (good) AND the gap between an honest and a deceptive adapter becomes harder to detect from the report alone (worth flagging).
+
+---
+
 ## 2026-04-28 — Cross-architecture Exp 1 v1 on Ouro-1.4B-Thinking
 
 VRAM-constrained: GPU 0 had 9.6 GB free, 7.6 GB on GPU 1, ruling out 7B+ at bf16. Picked Ouro-1.4B (universal-transformer) — most architecturally distinctive model that fits, and we had Phase 1's per-(layer, ut_step) finding that valence structure builds up across loop iterations.
