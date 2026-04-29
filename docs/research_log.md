@@ -4,6 +4,44 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Cross-architecture Experiment 5 on Ouro: base vs Thinking
+
+ByteDance ships an Ouro-1.4B base variant (the post-trained reasoning model is `Ouro-1.4B-Thinking`). Downloaded the base, ran Exp 1 v1 against it at the same layer (15) and contrast (within-emotion) as the Thinking run. Direct base-vs-post-trained comparison on a universal-transformer paradigm. Naturalistic-only n=60:
+
+| Channel | Ouro-1.4B base | Ouro-1.4B-Thinking | Δ post-training |
+|---|---|---|---|
+| substrate r vs target valence | +0.633 | +0.656 | +0.02 |
+| adapter r vs target valence | +0.625 | +0.628 | +0.00 |
+| untrained r vs target valence | +0.433 | +0.423 | −0.01 |
+| **Likert r vs target valence** | **+0.563** | **+0.626** | **+0.06** |
+| substrate ↔ Likert r | +0.652 | +0.714 | +0.06 |
+| substrate ↔ adapter r | +0.915 | +0.872 | −0.04 |
+| 6-class substrate accuracy | 0.500 | 0.450 | −0.05 |
+
+**Cross-architecture Exp 5 replication.** This is the same pattern Qwen2.5-0.5B base vs Instruct showed:
+
+| | Qwen base | Qwen-Instruct | Ouro base | Ouro-Thinking |
+|---|---|---|---|---|
+| substrate r vs target | +0.572 | +0.509 | +0.633 | +0.656 |
+| Likert r vs target | +0.382 | +0.516 | +0.563 | +0.626 |
+| substrate ↔ Likert r | +0.446 | +0.508 | +0.652 | +0.714 |
+
+Substrate ≈ equal between base and post-trained; Likert and substrate↔Likert tighten with post-training. This holds for (a) standard transformer and (b) universal-transformer. The mechanism the program has been pointing at — post-training reshapes the readout, not the substrate — is now confirmed on two architecturally different paradigms with two different post-training procedures (RLHF instruct on Qwen, "thinking"-style reasoning fine-tune on Ouro).
+
+**Mechanistic note: substrate↔adapter agreement is HIGHER in Ouro base than Thinking** (0.915 vs 0.872). Plus 6-class substrate accuracy is higher in base (0.500 vs 0.450). Some interpretations:
+- The substrate is *cleaner* in the base universal-transformer (less affected by reasoning-fine-tune drift).
+- The adapter trained on base substrate has less to compete with (no learned label-token alignment from Thinking training), so it reads cleanly off the substrate.
+- The Thinking model's adapter has to *fight* the model's existing thinking-trained tendency to generate longer, more reasoning-style outputs; base has no such competition.
+
+**Compat shims this required:**
+
+- `_ensure_rope_default_shim` — adds the `"default"` key to transformers 5.x's `ROPE_INIT_FUNCTIONS` (it was removed in favour of named variants). Ouro base looks up `ROPE_INIT_FUNCTIONS[self.rope_type]` with `rope_type="default"`.
+- `_patch_remote_rotary_classes` — adds `compute_default_rope_parameters` as a static method on any `*RotaryEmbedding` class in remote-code modules. Transformers 5.x's `_init_weights` accesses this directly on the rotary module; Ouro base doesn't define it as a class method.
+
+Both shims are now centralized in `src/models/adapter.py` so future custom-modeling repos with similar patterns (and there will be more) work through the standard `ModelAdapter.load` path without per-model patching.
+
+---
+
 ## 2026-04-29 — Per-ut-step Likert on Ouro: behavioral readout builds across loop iterations
 
 Ouro's `OuroForCausalLM.forward` accepts `exit_at_step=N`, which selects post-norm hidden states from `hidden_states_list[N]` (the model's per-ut-step state cache) and applies `lm_head` to them. So we can ask the model for its Likert valence rating using only N+1 of the 4 loop iterations and compare across N. n=60 naturalistic stimuli on Ouro-1.4B-Thinking:

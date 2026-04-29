@@ -69,6 +69,24 @@ def _patch_remote_modeling_modules(symbol_name: str, value) -> None:
             setattr(mod, symbol_name, value)
 
 
+def _patch_remote_rotary_classes(method_name: str, fn) -> None:
+    """Add `method_name` (as a static method) to any `*RotaryEmbedding` class
+    in loaded `transformers_modules.*`. Used because transformers 5.x's
+    `_init_weights` looks up `compute_default_rope_parameters` directly on
+    rotary-embedding modules — older custom-modeling repos (Ouro base) don't
+    define it as a class method.
+    """
+    for mod_name, mod in list(sys.modules.items()):
+        if not mod_name.startswith("transformers_modules."):
+            continue
+        for attr_name in dir(mod):
+            if "RotaryEmbedding" not in attr_name:
+                continue
+            cls = getattr(mod, attr_name, None)
+            if isinstance(cls, type) and not hasattr(cls, method_name):
+                setattr(cls, method_name, staticmethod(fn))
+
+
 def _ensure_llama_attention_classes_shim() -> None:
     """transformers 5.x removed the LLAMA_ATTENTION_CLASSES dict in favour of
     a unified `LlamaAttention` with `_attn_implementation` switching. Old
@@ -85,6 +103,21 @@ def _ensure_llama_attention_classes_shim() -> None:
             "sdpa": _ll.LlamaAttention,
             "flash_attention_2": _ll.LlamaAttention,
         }
+
+
+def _ensure_rope_default_shim() -> None:
+    """transformers 5.x removed the ``"default"`` key from ROPE_INIT_FUNCTIONS
+    (it now contains only the *named* RoPE variants — linear/dynamic/yarn/
+    longrope/llama3/proportional). Some custom-modeling repos (Ouro base)
+    look up ROPE_INIT_FUNCTIONS["default"] directly. Inject the shim here.
+    """
+    try:
+        from transformers import modeling_rope_utils as _ru
+    except Exception:
+        return
+    table = getattr(_ru, "ROPE_INIT_FUNCTIONS", None)
+    if isinstance(table, dict) and "default" not in table:
+        table["default"] = _compat_compute_default_rope_parameters
 
 
 def _detect_family(config) -> str:
@@ -118,6 +151,7 @@ class ModelAdapter:
     ) -> "ModelAdapter":
         if trust_remote_code:
             _ensure_llama_attention_classes_shim()
+            _ensure_rope_default_shim()
         try:
             tok = AutoTokenizer.from_pretrained(name, trust_remote_code=trust_remote_code)
         except Exception:
@@ -141,27 +175,37 @@ class ModelAdapter:
             pad_id = tok.pad_token_id if tok.pad_token_id is not None else getattr(config, "eos_token_id", 0)
             config.pad_token_id = pad_id
 
-        try:
-            model = AutoModelForCausalLM.from_pretrained(
+        def _from_pretrained():
+            return AutoModelForCausalLM.from_pretrained(
                 name, config=config, dtype=dtype, device_map=device_map,
                 trust_remote_code=trust_remote_code, **kwargs,
             )
-        except NameError as e:
-            # Some custom-modeling repos (Ouro 1.4B, in particular) reference
-            # `compute_default_rope_parameters` as a free name that newer
-            # transformers no longer exposes module-level. The first
-            # from_pretrained call loads the modeling module into sys.modules,
-            # then fails on instantiation. Patch and retry once.
+
+        try:
+            model = _from_pretrained()
+        except (NameError, AttributeError) as e:
+            # Some custom-modeling repos (Ouro 1.4B Thinking and base in
+            # particular) hit transformers 5.x compat issues around
+            # `compute_default_rope_parameters`:
+            #   * Thinking version raises NameError because its modeling
+            #     code references the bare free name (removed in 5.x).
+            #   * Base version raises AttributeError during _init_weights
+            #     because the function isn't defined as a class method on
+            #     OuroRotaryEmbedding (5.x's _init_weights accesses it as
+            #     module.compute_default_rope_parameters).
+            # By the time the exception fires the modeling module is
+            # already in sys.modules, so we can patch and retry.
             if "compute_default_rope_parameters" not in str(e):
                 raise
             _patch_remote_modeling_modules(
                 "compute_default_rope_parameters",
                 _compat_compute_default_rope_parameters,
             )
-            model = AutoModelForCausalLM.from_pretrained(
-                name, config=config, dtype=dtype, device_map=device_map,
-                trust_remote_code=trust_remote_code, **kwargs,
+            _patch_remote_rotary_classes(
+                "compute_default_rope_parameters",
+                _compat_compute_default_rope_parameters,
             )
+            model = _from_pretrained()
         model.eval()
         family = _detect_family(model.config)
         return cls(model=model, tokenizer=tok, family=family, name=name)
