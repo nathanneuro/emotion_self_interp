@@ -4,6 +4,30 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Per-ut-step Likert on Ouro: behavioral readout builds across loop iterations
+
+Ouro's `OuroForCausalLM.forward` accepts `exit_at_step=N`, which selects post-norm hidden states from `hidden_states_list[N]` (the model's per-ut-step state cache) and applies `lm_head` to them. So we can ask the model for its Likert valence rating using only N+1 of the 4 loop iterations and compare across N. n=60 naturalistic stimuli on Ouro-1.4B-Thinking:
+
+| ut step | r val vs target | r aro vs target | mean Likert spread (max − min across emotions) |
+|---|---|---|---|
+| 0 | +0.316 | +0.314 | 0.22 (−0.92 to −1.14) |
+| 1 | +0.590 | −0.190 | 0.67 (−0.60 to −1.27) |
+| **2** | **+0.739** (peak) | −0.005 | **0.84** (−0.81 to −1.65) |
+| 3 | +0.626 | +0.103 | 0.59 (−1.12 to −1.71) |
+| full | +0.626 | +0.103 | (matches ut=3) |
+
+This **parallels the Phase 1 PCA finding** (max ⎮PC1↔valence⎮ climbed 0.348 → 0.984 across ut=0 → 3 in the per-emotion-vector geometry) on the *behavioral* readout side. Loop iterations don't just refine the substrate vector geometry — they refine the model's reportable behavior built on top of it.
+
+**Two interpretations worth noting:**
+
+1. **Discrimination peaks at ut=2, not ut=3.** Per-emotion Likert ratings spread *most* at ut=2 (range 0.84 from blissful −0.81 to sad −1.65), then compress at ut=3 (range 0.59, all become more negative). The relative order is preserved across both, but ut=2 produces a stronger correlation with target valence. Plausible mechanism: by ut=3 the model has integrated enough "balanced answer" prior to pull ratings toward a uniform middle, even while the per-emotion ordering stays right. This suggests **adaptive early-exit at ut=2 might give better-discriminating self-reports than the full forward** for emotion-rating tasks. Worth checking on a stimulus where rating *magnitude* matters (e.g., is "I am terrified" more negative than "I am sad").
+
+2. **Substrate trajectory and behavioral trajectory match in shape, not in peak location.** Phase 1 substrate PCA peaks at ut=3 (|PC1↔val|=0.984). Likert readout peaks at ut=2 (r=+0.739). One layer of interpretation: the substrate keeps developing through ut=3, but the readout machinery (lm_head + ln_out) is calibrated for the post-final-iteration state and can't fully exploit the cleanest substrate. Another: the substrate "improvement" from ut=2 to ut=3 is a small refinement that's swamped by the readout's compression to safer ratings. Either way, **early-exit access to per-ut-step states is a useful interpretive lever** that single-pass models don't provide.
+
+This is a Ouro/universal-transformer-specific finding that doesn't naturally generalize to standard transformers (which have no analogue of "ut step") but does generalize to other looping or recurrent architectures (RWKV-style, eventually scratchpad/Chain-of-Thought models). For models that iterate over a shared computation, the model's own self-report trajectory across iterations gives an interpretive signal that single-pass introspection can't.
+
+---
+
 ## 2026-04-29 — Cross-architecture Phase 4 α-sweep on Ouro: monotonic causal dependence holds under looping
 
 Ran the Phase 4 alpha-sweep on Ouro-1.4B-Thinking at layer 15 with v_calm − v_desperate. The hook fires 4× per forward (once per ut step), so cumulative steering is 4×α. Sweep over α ∈ [−2, +2], n=5 per (emotion, level) bucket:

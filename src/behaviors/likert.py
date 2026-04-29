@@ -61,11 +61,12 @@ def likert_rating(
     model: ModelAdapter,
     stimulus: str,
     cfg: LikertConfig | None = None,
+    forward_kwargs: dict | None = None,
 ) -> LikertResult:
     cfg = cfg or LikertConfig()
     val_prompt = cfg.valence_template.format(stimulus=stimulus)
     aro_prompt = cfg.arousal_template.format(stimulus=stimulus)
     return LikertResult(
-        valence=score_numeric_logits(model, val_prompt, cfg.valence_scale),
-        arousal=score_numeric_logits(model, aro_prompt, cfg.arousal_scale),
+        valence=score_numeric_logits(model, val_prompt, cfg.valence_scale, forward_kwargs=forward_kwargs),
+        arousal=score_numeric_logits(model, aro_prompt, cfg.arousal_scale, forward_kwargs=forward_kwargs),
     )

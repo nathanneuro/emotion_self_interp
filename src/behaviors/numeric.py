@@ -61,6 +61,7 @@ def score_numeric_logits(
     model: ModelAdapter,
     prompt: str,
     scale: Iterable[int],
+    forward_kwargs: dict | None = None,
 ) -> NumericRatingResult:
     """Read out a probability distribution over numeric ratings at the next
     tokens after `prompt`, scoring each rating by the sum of log-probs of
@@ -98,7 +99,10 @@ def score_numeric_logits(
         if L < max_rt:
             attention_mask[i, P + L:] = 0
 
-    out = model.model(input_ids=input_ids, attention_mask=attention_mask, use_cache=False)
+    extra = forward_kwargs or {}
+    out = model.model(
+        input_ids=input_ids, attention_mask=attention_mask, use_cache=False, **extra,
+    )
     logits = out.logits  # (B, P + max_rt, V)
     log_probs = F.log_softmax(logits.float(), dim=-1)
 

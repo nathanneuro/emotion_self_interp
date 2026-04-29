@@ -161,6 +161,7 @@ Status:
 | Cross-arch Exp 1 v1 | **Ouro-1.4B done** (2026-04-28) | Universal-transformer at layer 15 (ut=3): substrate +0.66, adapter +0.63, untrained +0.42, Likert +0.63 vs target valence. Substrate↔Likert r=+0.71 — tightest cross-channel agreement of any architecture |
 | Cross-arch Exp 4 | **Ouro-1.4B done** (2026-04-29) | honest +0.71, substrate +0.68, Likert +0.63 vs target; deceptive collapses to **−0.30** (vs target) / **−0.34** (vs Likert) — even cleaner divergence than Qwen-Instruct. Universal-transformer looping *sharpens* both honest and deceptive adapter learning |
 | Cross-arch Phase 4 α-sweep | **Ouro-1.4B done** (2026-04-29) | Monotonic α→Likert response holds under universal-transformer looping; capability flat through \|α\|≤0.2, collapses at \|α\|=2; sharper saturation than Qwen consistent with the 4× cumulative hook firings per forward |
+| Per-ut-step Likert | **Ouro-1.4B done** (2026-04-29) | Likert r vs target valence across ut steps: 0.316→0.590→**0.739**→0.626. Behavioral readout follows the substrate's iterative-buildup trajectory; peak at ut=2 not ut=3 — early-exit may give better discrimination than full forward |
 
 ## Next actions (immediate)
 
