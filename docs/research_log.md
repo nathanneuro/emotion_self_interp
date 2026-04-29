@@ -4,6 +4,50 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Phase 4 α-sweep on Qwen-0.5B base: same model, base vs Instruct = the cliff
+
+Last cross-(base/post-trained) data point on standard-transformer paradigm. Qwen-0.5B base. Substrate↔Likert at baseline = +0.45 (Phase 3 result). Predicted: messy α-response.
+
+calm/eu Likert response:
+| α | Likert |
+|---|---|
+| −2.0 | +0.52 (positive!) |
+| −1.0 | −1.29 |
+| −0.5 | −1.57 (neg-arm min) |
+| 0.0 | −1.17 |
+| +0.5 | −0.76 |
+| +1.0 | −0.96 (slight regression) |
+| +2.0 | +1.36 (jump positive) |
+
+**Both arms non-monotonic.** Positive arm reverses at α=+1 → α=+2; negative arm bottoms at α=−0.5 then flips strongly positive at α=−2. Messiest response in the suite.
+
+**Updated final cross-paradigm Phase 4 picture (6 models, 4 paradigms):**
+
+| Model | Paradigm | Sub↔Likert r | α-response |
+|---|---|---|---|
+| Qwen-0.5B-Instruct | std-T (RLHF) | +0.52 | clean monotonic |
+| Ouro-1.4B base | universal-T (base) | +0.65 | clean monotonic |
+| Ouro-1.4B-Thinking | universal-T (FT) | +0.71 | clean monotonic |
+| **Qwen-0.5B base** | **std-T (base)** | **+0.45** | **messy both arms** |
+| gemma-2-2b base | std-T (base) | +0.22 | messy V on neg arm |
+| Monet-vd-4.1B base | sparse-MoE (base) | +0.25 | messy neg-arm reversal |
+
+**Three sharper findings from the Qwen base data point:**
+
+1. **Same model, base vs Instruct = the cliff.** Qwen-0.5B base (sub↔Likert +0.45, messy) → Qwen-0.5B-Instruct (sub↔Likert +0.52, clean). Same architecture, same parameters, same scale — only RLHF differs. The +0.07 jump in coupling is enough to flip the α-response from messy to clean.
+
+2. **The cliff is around substrate↔Likert ~+0.5.** Below: messy α-response (Qwen base, gemma base, Monet base). Above: clean (Qwen-Instruct, Ouro base, Ouro-Thinking). Surprisingly sharp transition.
+
+3. **Universal-T pretraining alone clears the cliff with margin.** Ouro base at +0.65 is well above the +0.5 threshold — and it gets there without instruction tuning. The architectural mechanism (looped readout machinery getting `n_ut`× pretraining signal per stimulus) is what does the work.
+
+**Final mechanistic picture closes:** standard-T base / sparse-MoE base sit below the substrate↔Likert cliff. Post-training (RLHF, instruction tuning) is what pushes them above for standard-T. Universal-T is born above the cliff via its architecture's pretraining dynamics.
+
+This is a clean explanatory model for why Phase 4 / Lindsey-style causal-dependence tests work cleanly on some models and not others. The *substrate is steerable* in all cases (the perturbation reaches the residual stream); what varies is whether the *Likert behavioral readout uses the steered substrate* — and this depends on the substrate↔Likert coupling tightness, which is determined by either post-training or looped-pretraining-architecture.
+
+For the program-level claim: substrate-driven channels (substrate cosine, trained adapter) are paradigm-agnostic and uniformly reliable as causal-dependence DVs. Likert is paradigm-conditional. Future work on causal dependence in non-post-trained / non-looped models should default to the trained-adapter readout, not Likert.
+
+---
+
 ## 2026-04-29 — Phase 4 α-sweep on Monet-4.1B (sparse-MoE): cross-paradigm Phase 4 complete
 
 Last α-sweep needed for cross-paradigm coverage. Predicted: messy α-response like gemma (Monet base substrate↔Likert is +0.25, loose). n=5 per bucket.
