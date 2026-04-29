@@ -175,6 +175,7 @@ Status:
 | Exp 4 on Monet-vd-4.1B (sparse-MoE) | **done** (2026-04-29) | substrate +0.74 (strongest in suite), honest +0.66, Likert +0.09 (weakest), deceptive −0.21. **Veridical introspection holds on sparse-MoE — cross-paradigm coverage now complete (4 architecture classes)**. Sparse routing dampens adapter trainability vs dense FFNs |
 | Exp 1 v1 on Monet-vd-4.1B | **done** (2026-04-29) | substrate +0.74, adapter +0.69, untrained +0.27, Likert +0.09. Substrate↔adapter r=**+0.91** (highest in suite, ahead of Ouro-Thinking's +0.87). Sparse-MoE shows largest "training matters" lift (untrained 0.27 → adapter 0.69, +0.42pp) of any model — Pepper's claim holds clearest here |
 | Phase 4 α-sweep on gemma-2-2b base | **done** (2026-04-29) | Capability robust across α=[−2,+2] (vs Qwen+Ouro break at ±2). Positive α monotonic but baseline Likert ~0; needs α≥+0.5 to leave noise floor. Negative arm non-monotonic. **Lindsey-style causal-dependence test works cleanly only when substrate↔Likert is post-training-tightened**; on base models substrate is steerable but Likert is unreliable |
+| Phase 4 α-sweep on Ouro-1.4B base | **done** (2026-04-29) | **Strictly monotonic and clean** on every bucket — same shape as Ouro-Thinking. Distinguishes hypotheses: it's substrate↔Likert TIGHTNESS (Ouro base +0.65) that drives clean response, not post-training per se (Ouro base IS base). Universal-transformer looping develops tight substrate↔readout coupling in pretraining; standard transformers need post-training for it |
 
 ## Next actions (immediate)
 
