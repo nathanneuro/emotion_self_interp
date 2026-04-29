@@ -176,10 +176,21 @@ class ModelAdapter:
             config.pad_token_id = pad_id
 
         def _from_pretrained():
-            return AutoModelForCausalLM.from_pretrained(
-                name, config=config, dtype=dtype, device_map=device_map,
-                trust_remote_code=trust_remote_code, **kwargs,
-            )
+            # transformers 5.x renamed `torch_dtype` to `dtype`. Try the new
+            # form first; fall back to the old kwarg in case we're running
+            # under an older transformers (e.g. compat_envs/monet).
+            try:
+                return AutoModelForCausalLM.from_pretrained(
+                    name, config=config, dtype=dtype, device_map=device_map,
+                    trust_remote_code=trust_remote_code, **kwargs,
+                )
+            except TypeError as e:
+                if "dtype" not in str(e):
+                    raise
+                return AutoModelForCausalLM.from_pretrained(
+                    name, config=config, torch_dtype=dtype, device_map=device_map,
+                    trust_remote_code=trust_remote_code, **kwargs,
+                )
 
         try:
             model = _from_pretrained()

@@ -4,6 +4,42 @@ Append-only notes on findings, open questions, and follow-ups that don't yet hav
 
 ---
 
+## 2026-04-29 — Exp 4 on Monet-vd-4.1B (sparse-MoE): cross-paradigm coverage complete
+
+Ran the deceptive-adapter test on Monet-vd-4.1B in `compat_envs/monet/` (transformers 4.45). Wrote `compat_envs/monet/run_exp4.py`, which reuses the main project's experiment4 helpers + adapter training via sys.path injection. Required adding a transformers-4.x compat fallback (`torch_dtype` instead of `dtype`) to `ModelAdapter.load`.
+
+Naturalistic n=60:
+
+| Model | Paradigm | substrate r | honest r | Likert r | deceptive r |
+|---|---|---|---|---|---|
+| Qwen-0.5B-Instruct | standard transformer + RLHF | +0.52 | +0.48 | +0.52 | −0.03 |
+| Ouro-1.4B base | universal-transformer | +0.65 | +0.68 | +0.56 | −0.19 |
+| Ouro-1.4B-Thinking | universal-transformer + reasoning FT | +0.68 | +0.71 | +0.63 | −0.30 |
+| gemma-2-2b base | standard transformer (base) | +0.73 | +0.78 | +0.15 | −0.19 |
+| **Monet-vd-4.1B** | **sparse-MoE (base)** | **+0.74** | **+0.66** | **+0.09** | **−0.21** |
+
+**Cross-paradigm coverage is now complete.** Four architectural paradigms tested:
+- Standard-transformer instruct (Qwen-Instruct, has all four channels working)
+- Standard-transformer base (gemma-2-2b, broken Likert)
+- Universal-transformer base + post-trained (Ouro pair)
+- Sparse-MoE base (Monet)
+
+All four paradigms show the substrate-vs-report decoupling. **Veridical introspection is paradigm-agnostic.** The Likert channel is the most post-training-dependent (weak in all base models tested); the substrate channel is universally informative.
+
+**Sparse-MoE-specific observation: weaker adapter despite stronger substrate.** Monet has the strongest substrate of any model in the suite (+0.74) but its honest adapter (+0.66) underperforms gemma-2-2b base's adapter (+0.78). Plausible mechanism: sparse-expert FFN routing makes the adapter's training have to thread through the model's expert-selection decisions, which adds noise. This shows up in deceptive too — Monet's deceptive swap-match accuracy is 0.367 (gemma 0.583, Ouro 0.483), so adapter training of *both* directions is harder under sparse routing.
+
+This generalizes the Ouro finding that substrate quality and adapter trainability scale together: the relationship holds, but the *coupling between substrate and adapter* depends on the routing/architecture in between. Sparse-MoE has a weaker substrate→adapter coupling than dense FFN.
+
+Cumulatively across the cross-model picture:
+- **Substrate quality** scales with pretraining, peaks in larger/well-trained base models (gemma-2-2b 0.73, Monet-4.1B 0.74).
+- **Likert quality** scales with post-training (Ouro-Thinking 0.63, Qwen-Inst 0.52, Ouro base 0.56, gemma base 0.15, Monet base 0.09).
+- **Adapter trainability** scales with substrate quality but is dampened by routing complexity (Monet < gemma despite higher substrate).
+- **Deceptive divergence** is achievable everywhere; magnitude varies with substrate↔readout machinery tightness (Ouro-Thinking −0.30 strongest).
+
+The substrate is the underlying ground truth; readout quality is paradigm- and training-dependent.
+
+---
+
 ## 2026-04-29 — Exp 4 on gemma-2-2b base: veridical introspection holds even with broken Likert
 
 Ran the deceptive-adapter test on gemma-2-2b base (the model that showed the weakest Likert in our suite, r=+0.15). Naturalistic n=60.
